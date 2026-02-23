@@ -13,9 +13,9 @@ export const useAuth = () => {
 
 export const AuthProvider = ({ children }) => {
     const [user, setUser] = useState(null);
+    const [stepFlags, setStepFlags] = useState({});
     const [loading, setLoading] = useState(true);
     const [isAuthenticated, setIsAuthenticated] = useState(false);
-
 
     useEffect(() => {
         checkAuth();
@@ -25,9 +25,15 @@ export const AuthProvider = ({ children }) => {
         try {
             const data = await getUserProfile();
             setUser(data.user);
+            setStepFlags({
+                has_identity_doc: data.has_identity_doc || false,
+                has_passed_assessment: data.has_passed_assessment || false,
+                has_documents: data.has_documents || false,
+            });
             setIsAuthenticated(true);
         } catch (error) {
             setUser(null);
+            setStepFlags({});
             setIsAuthenticated(false);
         } finally {
             setLoading(false);
@@ -43,6 +49,10 @@ export const AuthProvider = ({ children }) => {
         setUser(userData);
     };
 
+    const updateStepFlags = (flags) => {
+        setStepFlags(prev => ({ ...prev, ...flags }));
+    };
+
     const logout = async () => {
         try {
             await logoutApi();
@@ -50,17 +60,20 @@ export const AuthProvider = ({ children }) => {
             console.error('Logout error:', error);
         } finally {
             setUser(null);
+            setStepFlags({});
             setIsAuthenticated(false);
         }
     };
 
     const value = {
         user,
+        stepFlags,
         loading,
         isAuthenticated,
         login,
         logout,
         updateUser,
+        updateStepFlags,
         checkAuth,
     };
 
