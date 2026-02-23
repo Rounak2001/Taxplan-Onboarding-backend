@@ -10,287 +10,227 @@ const Onboarding = () => {
     const [errors, setErrors] = useState({});
 
     const [formData, setFormData] = useState({
-        full_name: user?.full_name || '',
-        age: '',
-        dob: '',
-        phone_number: '',
-        address: '',
-        practice_type: '',
-        business_name: '',
-        years_of_experience: '',
+        first_name: user?.first_name || '',
+        middle_name: user?.middle_name || '',
+        last_name: user?.last_name || '',
+        age: user?.age || '',
+        dob: user?.dob || '',
+        phone_number: user?.phone_number || '',
+        address_line1: user?.address_line1 || '',
+        address_line2: user?.address_line2 || '',
+        city: user?.city || '',
+        state: user?.state || '',
+        pincode: user?.pincode || '',
+        practice_type: user?.practice_type || 'Individual',
+        years_of_experience: user?.years_of_experience || '',
     });
+
+    const calculateAge = (dob) => {
+        if (!dob) return '';
+        const birth = new Date(dob);
+        const today = new Date();
+        let age = today.getFullYear() - birth.getFullYear();
+        const m = today.getMonth() - birth.getMonth();
+        if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
+        return age >= 0 ? age : '';
+    };
 
     const handleChange = (e) => {
         const { name, value } = e.target;
-        setFormData(prev => ({ ...prev, [name]: value }));
-        // Clear error when user types
-        if (errors[name]) {
-            setErrors(prev => ({ ...prev, [name]: null }));
+        if (name === 'dob') {
+            setFormData(prev => ({ ...prev, dob: value, age: calculateAge(value) }));
+            if (errors.dob || errors.age) setErrors(prev => ({ ...prev, dob: null, age: null }));
+        } else {
+            setFormData(prev => ({ ...prev, [name]: value }));
+            if (errors[name]) setErrors(prev => ({ ...prev, [name]: null }));
         }
     };
 
-    const validateForm = () => {
-        const newErrors = {};
-
-        if (!formData.full_name || formData.full_name.trim().length < 2) {
-            newErrors.full_name = 'Full name is required (at least 2 characters)';
-        }
-
-        const age = parseInt(formData.age);
-        if (!formData.age || age < 18 || age > 100) {
-            newErrors.age = 'Age must be between 18 and 100';
-        }
-
+    const validate = () => {
+        const e = {};
+        if (!formData.first_name?.trim() || formData.first_name.trim().length < 2) e.first_name = 'First name required (min 2 chars)';
+        if (!formData.last_name?.trim()) e.last_name = 'Last name required';
         if (!formData.dob) {
-            newErrors.dob = 'Date of birth is required';
+            e.dob = 'Date of birth required';
+        } else {
+            const age = calculateAge(formData.dob);
+            if (age < 18) e.dob = 'Must be at least 18 years old';
+            if (age > 100) e.dob = 'Please enter a valid date of birth';
+            if (new Date(formData.dob) > new Date()) e.dob = 'Date of birth cannot be in the future';
         }
-
-        if (!formData.phone_number || formData.phone_number.trim().length < 10) {
-            newErrors.phone_number = 'Valid phone number is required (at least 10 digits)';
-        }
-
-        if (!formData.address || formData.address.trim().length < 10) {
-            newErrors.address = 'Please enter a complete address (at least 10 characters)';
-        }
-
-        if (!formData.practice_type) {
-            newErrors.practice_type = 'Please select a type of practice';
-        }
-
-        if (!formData.years_of_experience) {
-            newErrors.years_of_experience = 'Years of experience is required';
-        }
-
-        if (formData.practice_type && formData.practice_type !== 'Individual' && (!formData.business_name || formData.business_name.trim().length < 2)) {
-            newErrors.business_name = 'Business name is required';
-        }
-
-        setErrors(newErrors);
-        return Object.keys(newErrors).length === 0;
+        if (!formData.phone_number?.trim() || formData.phone_number.trim().length < 10) e.phone_number = 'Valid phone number required (10+ digits)';
+        if (!formData.address_line1?.trim() || formData.address_line1.trim().length < 5) e.address_line1 = 'Address required (min 5 chars)';
+        if (!formData.city?.trim()) e.city = 'City required';
+        if (!formData.state?.trim()) e.state = 'State required';
+        if (!formData.pincode?.trim() || formData.pincode.trim().length < 6) e.pincode = 'Valid pincode required (6 digits)';
+        return e;
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-
-        if (!validateForm()) return;
-
+        const v = validate();
+        if (Object.keys(v).length > 0) { setErrors(v); return; }
         setLoading(true);
         try {
-            const data = await completeOnboarding({
-                ...formData,
-                age: parseInt(formData.age),
-            });
+            const data = await completeOnboarding(formData);
             updateUser(data.user);
             navigate('/success');
-        } catch (error) {
-            console.error('Onboarding failed:', error);
-            if (error.response?.data) {
-                // Handle validation errors from backend
-                const backendErrors = error.response.data;
-                const formattedErrors = {};
-                Object.keys(backendErrors).forEach(key => {
-                    formattedErrors[key] = Array.isArray(backendErrors[key])
-                        ? backendErrors[key][0]
-                        : backendErrors[key];
-                });
-                setErrors(formattedErrors);
-            } else {
-                alert('Failed to submit details. Please try again.');
+        } catch (err) {
+            console.error('Onboarding failed:', err);
+            if (err.response?.data) {
+                const be = {};
+                Object.entries(err.response.data).forEach(([k, v]) => { be[k] = Array.isArray(v) ? v[0] : v; });
+                setErrors(be);
             }
-        } finally {
-            setLoading(false);
-        }
+        } finally { setLoading(false); }
     };
 
+    const indianStates = [
+        'Andhra Pradesh', 'Arunachal Pradesh', 'Assam', 'Bihar', 'Chhattisgarh', 'Goa', 'Gujarat', 'Haryana',
+        'Himachal Pradesh', 'Jharkhand', 'Karnataka', 'Kerala', 'Madhya Pradesh', 'Maharashtra', 'Manipur',
+        'Meghalaya', 'Mizoram', 'Nagaland', 'Odisha', 'Punjab', 'Rajasthan', 'Sikkim', 'Tamil Nadu', 'Telangana',
+        'Tripura', 'Uttar Pradesh', 'Uttarakhand', 'West Bengal', 'Andaman and Nicobar Islands', 'Chandigarh',
+        'Dadra and Nagar Haveli and Daman and Diu', 'Delhi', 'Jammu and Kashmir', 'Ladakh', 'Lakshadweep', 'Puducherry'
+    ];
+
+    const today = new Date();
+    const maxDob = new Date(today.getFullYear() - 18, today.getMonth(), today.getDate()).toISOString().split('T')[0];
+    const minDob = new Date(today.getFullYear() - 100, today.getMonth(), today.getDate()).toISOString().split('T')[0];
+
+    const inputStyle = (hasError) => ({
+        width: '100%', padding: '10px 14px', borderRadius: 8, fontSize: 14,
+        border: hasError ? '1px solid #fca5a5' : '1px solid #d1d5db',
+        background: hasError ? '#fef2f2' : '#fff', outline: 'none',
+        transition: 'border 0.2s',
+    });
+
+    const labelStyle = { display: 'block', fontSize: 13, fontWeight: 500, color: '#374151', marginBottom: 6 };
+    const errorStyle = { fontSize: 12, color: '#ef4444', marginTop: 4 };
+
     return (
-        /* Body Background: Clean white with subtle slate gradient */
-        <div className="min-h-screen flex items-center justify-center p-6 py-12 bg-emerald-100">
-
-            {/* Main Card: White glass effect with emerald/black accents - Scale optimized for laptop */}
-            <div className="w-full max-w-4xl p-10 md:p-16 bg-white/80 backdrop-blur-xl border border-emerald-100/50 rounded-[2.5rem] shadow-[0_20px_40px_-15px_rgba(16,185,129,0.15)] animate-[fadeIn_0.5s_ease-out_forwards]">
-
-                {/* Header */}
-                <div className="text-center mb-12">
-                    <div className="flex items-center justify-center gap-3 mb-6">
-                        <div className="w-12 h-12 flex items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-slate-900 text-white font-bold text-xl shadow-lg shadow-emerald-500/20">
-                            TA
-                        </div>
-                        <h1 className="text-2xl font-bold text-slate-900 tracking-tight">TaxplanAdvisor</h1>
+        <div style={{ minHeight: '100vh', background: '#f9fafb', fontFamily: "'Inter', system-ui, sans-serif" }}>
+            {/* Header */}
+            <header style={{ background: '#fff', borderBottom: '1px solid #e5e7eb', position: 'sticky', top: 0, zIndex: 30 }}>
+                <div style={{ maxWidth: 900, margin: '0 auto', padding: '0 32px', height: 56, display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <div style={{ width: 32, height: 32, background: '#059669', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <span style={{ color: '#fff', fontWeight: 700, fontSize: 13 }}>T</span>
                     </div>
-                    {/* Gradient Title: Green to Black */}
-                    <h2 className="text-3xl md:text-4xl font-extrabold bg-gradient-to-r from-emerald-600 to-slate-800 bg-clip-text text-transparent mb-4">
-                        Complete Your Profile
-                    </h2>
-                    <p className="text-slate-500 text-lg">
-                        Please provide your details to complete the onboarding process
-                    </p>
+                    <span style={{ fontWeight: 600, color: '#111827', fontSize: 15 }}>Taxplan Advisor</span>
+                    <span style={{ marginLeft: 'auto', fontSize: 13, color: '#9ca3af' }}>{user?.email}</span>
+                </div>
+            </header>
+
+            <div style={{ maxWidth: 900, margin: '0 auto', padding: '32px 32px 60px' }}>
+                {/* Title */}
+                <div style={{ marginBottom: 28 }}>
+                    <span style={{ display: 'inline-block', fontSize: 12, fontWeight: 600, color: '#059669', background: '#ecfdf5', padding: '4px 12px', borderRadius: 20, marginBottom: 12 }}>Step 1 of 5</span>
+                    <h1 style={{ fontSize: 24, fontWeight: 700, color: '#111827', margin: 0 }}>Complete Your Profile</h1>
+                    <p style={{ fontSize: 14, color: '#6b7280', marginTop: 4 }}>Fill in your details accurately. This information is used for verification.</p>
                 </div>
 
-                {/* Important Note Box: Amber/Yellow theme for visibility on white */}
-                <div className="mb-10 p-6 bg-amber-50 border border-amber-200 rounded-2xl flex items-start gap-4 text-amber-800 text-base leading-relaxed shadow-sm">
-                    <svg className="w-6 h-6 mt-1 flex-shrink-0 text-amber-500" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                    </svg>
-                    <div>
-                        <strong className="block text-amber-900 text-lg mb-1">Important Notice</strong>
-                        Accurate details are required. Verification credentials will be sent to: <span className="font-bold text-slate-900 underline decoration-amber-500/50">{user?.email}</span>
-                    </div>
-                </div>
-
-                {/* Form: Light theme inputs */}
-                <form onSubmit={handleSubmit} className="space-y-8">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-
-                        {/* Full Name */}
-                        <div className="md:col-span-2">
-                            <label className="block text-slate-700 font-bold mb-2 ml-1">Full Name <span className="text-red-500">*</span></label>
-                            <input
-                                type="text"
-                                name="full_name"
-                                value={formData.full_name}
-                                onChange={handleChange}
-                                className={`w-full p-4 bg-slate-50 border ${errors.full_name ? 'border-red-500 bg-red-50' : 'border-slate-200'} rounded-xl text-slate-900 text-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all placeholder:text-slate-400`}
-                                placeholder="Enter your full name"
-                            />
-                            {errors.full_name && <p className="text-red-500 text-sm mt-2 ml-1 font-medium">{errors.full_name}</p>}
-                        </div>
-
-                        {/* Age */}
-                        <div>
-                            <label className="block text-slate-700 font-bold mb-2 ml-1">Age <span className="text-red-500">*</span></label>
-                            <input
-                                type="number"
-                                name="age"
-                                value={formData.age}
-                                onChange={handleChange}
-                                className={`w-full p-4 bg-slate-50 border ${errors.age ? 'border-red-500 bg-red-50' : 'border-slate-200'} rounded-xl text-slate-900 text-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all placeholder:text-slate-400`}
-                                placeholder="Min 18"
-                            />
-                            {errors.age && <p className="text-red-500 text-sm mt-2 ml-1 font-medium">{errors.age}</p>}
-                        </div>
-
-                        {/* DOB */}
-                        <div>
-                            <label className="block text-slate-700 font-bold mb-2 ml-1">Date of Birth <span className="text-red-500">*</span></label>
-                            <input
-                                type="date"
-                                name="dob"
-                                value={formData.dob}
-                                onChange={handleChange}
-                                className={`w-full p-4 bg-slate-50 border ${errors.dob ? 'border-red-500 bg-red-50' : 'border-slate-200'} rounded-xl text-slate-900 text-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-slate-500`} // text-slate-500 for date placeholder look
-                            />
-                            {errors.dob && <p className="text-red-500 text-sm mt-2 ml-1 font-medium">{errors.dob}</p>}
-                        </div>
-
-                        {/* Phone Number */}
-                        <div className="md:col-span-2">
-                            <label className="block text-slate-700 font-bold mb-2 ml-1">Phone Number <span className="text-red-500">*</span></label>
-                            <input
-                                type="tel"
-                                name="phone_number"
-                                value={formData.phone_number}
-                                onChange={handleChange}
-                                className={`w-full p-4 bg-slate-50 border ${errors.phone_number ? 'border-red-500 bg-red-50' : 'border-slate-200'} rounded-xl text-slate-900 text-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all placeholder:text-slate-400`}
-                                placeholder="+91 XXXXX XXXXX"
-                            />
-                            {errors.phone_number && <p className="text-red-500 text-sm mt-2 ml-1 font-medium">{errors.phone_number}</p>}
-                        </div>
-
-                        {/* Address */}
-                        <div className="md:col-span-2">
-                            <label className="block text-slate-700 font-bold mb-2 ml-1">Full Address <span className="text-red-500">*</span></label>
-                            <textarea
-                                name="address"
-                                value={formData.address}
-                                onChange={handleChange}
-                                rows="3"
-                                className={`w-full p-4 bg-slate-50 border ${errors.address ? 'border-red-500 bg-red-50' : 'border-slate-200'} rounded-xl text-slate-900 text-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all resize-none placeholder:text-slate-400`}
-                                placeholder="House No, Building, Area, City, Pincode"
-                            />
-                            {errors.address && <p className="text-red-500 text-sm mt-2 ml-1 font-medium">{errors.address}</p>}
-                        </div>
-
-                        {/* Practice Details Selection */}
-                        <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-8 pt-4 border-t border-slate-100">
-                            {/* Type of Practice */}
+                <form onSubmit={handleSubmit}>
+                    {/* Personal Information */}
+                    <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e5e7eb', padding: 24, marginBottom: 16 }}>
+                        <h2 style={{ fontSize: 15, fontWeight: 600, color: '#111827', margin: '0 0 20px' }}>Personal Information</h2>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
                             <div>
-                                <label className="block text-slate-700 font-bold mb-2 ml-1">Type of Practice <span className="text-red-500">*</span></label>
-                                <select
-                                    name="practice_type"
-                                    value={formData.practice_type}
-                                    onChange={handleChange}
-                                    className={`w-full p-4 bg-slate-50 border ${errors.practice_type ? 'border-red-500 bg-red-50' : 'border-slate-200'} rounded-xl text-slate-900 text-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all cursor-pointer`}
-                                >
-                                    <option value="">Select Type</option>
-                                    <option value="Individual">Individual</option>
-                                    <option value="LLP">LLP</option>
-                                    <option value="Firm">Firm</option>
-                                    <option value="Partnership">Partnership</option>
-                                    <option value="Company">Company</option>
+                                <label style={labelStyle}>First Name <span style={{ color: '#ef4444' }}>*</span></label>
+                                <input name="first_name" value={formData.first_name} onChange={handleChange} placeholder="Enter first name" style={inputStyle(errors.first_name)} />
+                                {errors.first_name && <p style={errorStyle}>{errors.first_name}</p>}
+                            </div>
+                            <div>
+                                <label style={labelStyle}>Middle Name</label>
+                                <input name="middle_name" value={formData.middle_name} onChange={handleChange} placeholder="Enter middle name" style={inputStyle(false)} />
+                            </div>
+                            <div>
+                                <label style={labelStyle}>Last Name <span style={{ color: '#ef4444' }}>*</span></label>
+                                <input name="last_name" value={formData.last_name} onChange={handleChange} placeholder="Enter last name" style={inputStyle(errors.last_name)} />
+                                {errors.last_name && <p style={errorStyle}>{errors.last_name}</p>}
+                            </div>
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginTop: 16 }}>
+                            <div>
+                                <label style={labelStyle}>Date of Birth <span style={{ color: '#ef4444' }}>*</span></label>
+                                <input type="date" name="dob" value={formData.dob} onChange={handleChange}
+                                    max={maxDob} min={minDob}
+                                    style={inputStyle(errors.dob)} />
+                                {errors.dob && <p style={errorStyle}>{errors.dob}</p>}
+                            </div>
+                            <div>
+                                <label style={labelStyle}>Age</label>
+                                <input value={formData.age} readOnly disabled placeholder="Auto-calculated"
+                                    style={{ ...inputStyle(false), background: '#f9fafb', color: '#9ca3af', cursor: 'not-allowed' }} />
+                            </div>
+                            <div>
+                                <label style={labelStyle}>Phone Number <span style={{ color: '#ef4444' }}>*</span></label>
+                                <input name="phone_number" value={formData.phone_number} onChange={handleChange} placeholder="+91 XXXXXXXXXX" type="tel" style={inputStyle(errors.phone_number)} />
+                                {errors.phone_number && <p style={errorStyle}>{errors.phone_number}</p>}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Address */}
+                    <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e5e7eb', padding: 24, marginBottom: 16 }}>
+                        <h2 style={{ fontSize: 15, fontWeight: 600, color: '#111827', margin: '0 0 20px' }}>Address Details</h2>
+                        <div style={{ marginBottom: 16 }}>
+                            <label style={labelStyle}>Address Line 1 <span style={{ color: '#ef4444' }}>*</span></label>
+                            <input name="address_line1" value={formData.address_line1} onChange={handleChange} placeholder="Street address, building" style={inputStyle(errors.address_line1)} />
+                            {errors.address_line1 && <p style={errorStyle}>{errors.address_line1}</p>}
+                        </div>
+                        <div style={{ marginBottom: 16 }}>
+                            <label style={labelStyle}>Address Line 2</label>
+                            <input name="address_line2" value={formData.address_line2} onChange={handleChange} placeholder="Apartment, suite, unit (optional)" style={inputStyle(false)} />
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
+                            <div>
+                                <label style={labelStyle}>City <span style={{ color: '#ef4444' }}>*</span></label>
+                                <input name="city" value={formData.city} onChange={handleChange} placeholder="Enter city" style={inputStyle(errors.city)} />
+                                {errors.city && <p style={errorStyle}>{errors.city}</p>}
+                            </div>
+                            <div>
+                                <label style={labelStyle}>State <span style={{ color: '#ef4444' }}>*</span></label>
+                                <select name="state" value={formData.state} onChange={handleChange} style={inputStyle(errors.state)}>
+                                    <option value="">Select State</option>
+                                    {indianStates.map(s => <option key={s} value={s}>{s}</option>)}
                                 </select>
-                                {errors.practice_type && <p className="text-red-500 text-sm mt-2 ml-1 font-medium">{errors.practice_type}</p>}
+                                {errors.state && <p style={errorStyle}>{errors.state}</p>}
                             </div>
-
-                            {/* Years of Experience */}
                             <div>
-                                <label className="block text-slate-700 font-bold mb-2 ml-1">Years of Experience <span className="text-red-500">*</span></label>
-                                <input
-                                    type="number"
-                                    name="years_of_experience"
-                                    value={formData.years_of_experience}
-                                    onChange={handleChange}
-                                    min="0"
-                                    className={`w-full p-4 bg-slate-50 border ${errors.years_of_experience ? 'border-red-500 bg-red-50' : 'border-slate-200'} rounded-xl text-slate-900 text-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all placeholder:text-slate-400`}
-                                    placeholder="e.g. 5"
-                                />
-                                {errors.years_of_experience && <p className="text-red-500 text-sm mt-2 ml-1 font-medium">{errors.years_of_experience}</p>}
+                                <label style={labelStyle}>Pincode <span style={{ color: '#ef4444' }}>*</span></label>
+                                <input name="pincode" value={formData.pincode} onChange={handleChange} placeholder="e.g. 560001" style={inputStyle(errors.pincode)} />
+                                {errors.pincode && <p style={errorStyle}>{errors.pincode}</p>}
                             </div>
-
-                            {/* Business Name - Conditional */}
-                            {formData.practice_type && formData.practice_type !== 'Individual' && (
-                                <div className="md:col-span-2 animate-[fadeIn_0.3s_ease-out_forwards]">
-                                    <label className="block text-slate-700 font-bold mb-2 ml-1">
-                                        {formData.practice_type} Name <span className="text-red-500">*</span>
-                                    </label>
-                                    <input
-                                        type="text"
-                                        name="business_name"
-                                        value={formData.business_name}
-                                        onChange={handleChange}
-                                        className={`w-full p-4 bg-slate-50 border ${errors.business_name ? 'border-red-500 bg-red-50' : 'border-slate-200'} rounded-xl text-slate-900 text-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all placeholder:text-slate-400`}
-                                        placeholder={`Enter Name of ${formData.practice_type}`}
-                                    />
-                                    {errors.business_name && <p className="text-red-500 text-sm mt-2 ml-1 font-medium">{errors.business_name}</p>}
-                                </div>
-                            )}
                         </div>
                     </div>
 
-                    {/* Submit Button: Green to Black Gradient */}
-                    <button
-                        type="submit"
-                        disabled={loading}
-                        className="w-full py-5 bg-gradient-to-r from-emerald-600 to-slate-900 hover:from-emerald-500 hover:to-slate-800 text-white text-xl font-bold rounded-2xl shadow-[0_10px_30px_rgba(16,185,129,0.3)] hover:-translate-y-1 active:translate-y-0 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                        {loading ? (
-                            <span className="flex items-center justify-center gap-3">
-                                <svg className="animate-spin h-6 w-6 text-emerald-200" viewBox="0 0 24 24">
-                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                                </svg>
-                                Submitting Details...
-                            </span>
-                        ) : (
-                            'Submit Profile & Continue'
-                        )}
-                    </button>
-                </form>
-            </div>
+                    {/* Practice */}
+                    <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e5e7eb', padding: 24, marginBottom: 24 }}>
+                        <h2 style={{ fontSize: 15, fontWeight: 600, color: '#111827', margin: '0 0 20px' }}>Practice Details</h2>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16 }}>
+                            <div>
+                                <label style={labelStyle}>Practice Type</label>
+                                <select name="practice_type" value={formData.practice_type} onChange={handleChange} style={inputStyle(false)}>
+                                    <option value="Individual">Individual</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label style={labelStyle}>Years of Experience</label>
+                                <input name="years_of_experience" value={formData.years_of_experience} onChange={handleChange} type="number" placeholder="e.g. 5" style={inputStyle(false)} />
+                            </div>
+                        </div>
+                    </div>
 
-            {/* Background Orbs: Subtle Green and Grey */}
-            <div className="fixed top-0 left-0 w-full h-full pointer-events-none overflow-hidden -z-10">
-                <div className="absolute top-[-10%] right-[-10%] w-[800px] h-[800px] bg-emerald-500/5 rounded-full blur-[150px]"></div>
-                <div className="absolute bottom-[-10%] left-[-10%] w-[800px] h-[800px] bg-slate-900/5 rounded-full blur-[150px]"></div>
+                    <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                        <button type="submit" disabled={loading} style={{
+                            padding: '12px 32px', borderRadius: 8, fontWeight: 600, fontSize: 14,
+                            border: 'none', cursor: loading ? 'not-allowed' : 'pointer',
+                            background: loading ? '#e5e7eb' : '#059669', color: loading ? '#9ca3af' : '#fff',
+                            transition: 'background 0.2s'
+                        }}>
+                            {loading ? 'Submitting...' : 'Submit & Continue →'}
+                        </button>
+                    </div>
+                </form>
             </div>
         </div>
     );
