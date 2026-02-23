@@ -9,13 +9,10 @@ from rest_framework.response import Response
 from .models import FaceVerification
 from utils.supabase_client import get_supabase_client
 
+from utils.rekognition_client import get_rekognition_client
+
 # Initialize Rekognition client
-rekognition = boto3.client(
-    "rekognition",
-    aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
-    aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
-    region_name=settings.AWS_REGION,
-)
+rekognition = get_rekognition_client()
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
@@ -32,15 +29,12 @@ def upload_photo(request, user_id):
         return Response({"error": "No photo uploaded"}, status=status.HTTP_400_BAD_REQUEST)
 
     try:
-        supabase = get_supabase_client()
-        file_path = f"{user.id}/id_photo_{uuid.uuid4()}.jpg"
+        # Save to S3 via default storage
+        from django.core.files.storage import default_storage
+        file_path = f"face_verification/{user.id}/id_photo_{uuid.uuid4()}.jpg"
         
-        # Upload to Supabase
-        supabase.storage.from_("consultant_faceverification").upload(
-            file_path,
-            uploaded_photo.read(),
-            {"content-type": uploaded_photo.content_type}
-        )
+        # Save file
+        saved_path = default_storage.save(file_path, uploaded_photo)
 
         # Update or create FaceVerification record
         verification, created = FaceVerification.objects.get_or_create(user=user)
@@ -77,25 +71,25 @@ def verify_face(request, user_id):
         except FaceVerification.DoesNotExist:
             return Response({"error": "ID photo not found. Please upload ID photo first."}, status=status.HTTP_404_NOT_FOUND)
 
-        supabase = get_supabase_client()
-        bucket_name = "consultant_faceverification"
-
-        # 1. Download ID photo from Supabase
-        id_photo_data = supabase.storage.from_(bucket_name).download(id_photo_path)
+        # 1. Download ID photo from Storage (S3)
+        from django.core.files.storage import default_storage
+        try:
+            with default_storage.open(id_photo_path, 'rb') as f:
+                id_photo_data = f.read()
+        except Exception:
+             return Response({"error": "Failed to retrieve ID photo"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
         # 2. Process Live Photo (Base64 -> Bytes)
-        
         if "base64," in live_photo_base64:
             live_photo_base64 = live_photo_base64.split("base64,")[1]
         live_photo_bytes = base64.b64decode(live_photo_base64)
 
-        # 3. Upload Live Photo to Supabase
-        live_photo_path = f"{user.id}/live_photo_{uuid.uuid4()}.jpg"
-        supabase.storage.from_(bucket_name).upload(
-            live_photo_path,
-            live_photo_bytes,
-            {"content-type": "image/jpeg"}
-        )
+        # 3. Upload Live Photo to Storage (S3)
+        from django.core.files.base import ContentFile
+        live_photo_path = f"face_verification/{user.id}/live_photo_{uuid.uuid4()}.jpg"
+        
+        # ContentFile needed to save bytes directly
+        default_storage.save(live_photo_path, ContentFile(live_photo_bytes))
         
         # Update record with live photo path
         verification.live_image_path = live_photo_path
@@ -123,7 +117,8 @@ def verify_face(request, user_id):
     
         response = rekognition.compare_faces(
             SourceImage={"Bytes": id_photo_data},
-            TargetImage={"Bytes": live_photo_bytes}
+            TargetImage={"Bytes": live_photo_bytes},
+            SimilarityThreshold=85
         )
 
         matches = response.get("FaceMatches", [])
