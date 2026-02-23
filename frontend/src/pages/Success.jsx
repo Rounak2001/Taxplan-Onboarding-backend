@@ -1,135 +1,178 @@
-import { useAuth } from '../context/AuthContext';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+import { getLatestResult } from '../services/api';
 
 const Success = () => {
-    const { user, logout } = useAuth();
+    const { user, stepFlags, logout, checkAuth } = useAuth();
     const navigate = useNavigate();
+    const [assessmentPassed, setAssessmentPassed] = useState(stepFlags?.has_passed_assessment || false);
+    const [assessmentStatus, setAssessmentStatus] = useState(null);
+    const [isDisqualified, setIsDisqualified] = useState(false);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        checkAuth().then(() => setLoading(false)).catch(() => setLoading(false));
+        getLatestResult()
+            .then(data => {
+                if (data?.passed) setAssessmentPassed(true);
+                if (data?.status) setAssessmentStatus(data.status);
+                if (data?.disqualified) setIsDisqualified(true);
+            })
+            .catch(() => { });
+    }, []);
 
     const handleLogout = async () => {
         await logout();
         navigate('/');
     };
 
-    // Placeholder for a "Start" action
-    const handleProceed = () => {
+    const hasIdentity = stepFlags?.has_identity_doc;
+    const isVerified = user?.is_verified;
+    const isFlagged = assessmentStatus === 'flagged';
 
-     navigate('/onboarding/expertise');
-};
+    // Disqualified if flagged OR explicitly disqualified by max attempts
+    const disqualified = isFlagged || isDisqualified;
+
+    const steps = [
+        { label: 'Profile Details', desc: 'Personal & practice information', done: user?.is_onboarded, icon: '👤' },
+        { label: 'Identity Verification', desc: 'Upload government-issued ID', done: hasIdentity, action: () => navigate('/onboarding/identity'), icon: '🪪' },
+        { label: 'Face Verification', desc: 'Verify your identity via camera', done: isVerified, requires: hasIdentity, action: () => navigate('/onboarding/face-verification'), icon: '📸' },
+        {
+            label: disqualified ? 'Assessment Disqualified' : 'Domain Assessment',
+            desc: disqualified ? 'Maximum attempts exceeded or violations detected.' : '50 MCQs + Video questions',
+            done: assessmentPassed || stepFlags?.has_passed_assessment,
+            requires: isVerified && !disqualified,
+            action: disqualified ? null : () => navigate('/assessment/select'),
+            icon: disqualified ? '🚫' : '📝',
+            customStatus: disqualified ? <span style={{ fontSize: 12, color: '#dc2626', fontWeight: 600, background: '#fef2f2', padding: '6px 14px', borderRadius: 20, border: '1px solid #fecaca' }}>🚫 Disqualified</span> : null
+        },
+        { label: 'Qualification Upload', desc: 'Upload certificates & degrees', done: stepFlags?.has_documents, requires: assessmentPassed || stepFlags?.has_passed_assessment, action: () => navigate(stepFlags?.has_documents ? '/onboarding/complete' : '/onboarding/documentation'), icon: '📄' },
+    ];
+
+    const currentStepIndex = steps.findIndex((s, i) => {
+        if (s.done) return false;
+        if (i === 0) return true;
+        for (let j = 0; j < i; j++) { if (!steps[j].done) return false; }
+        return true;
+    });
+
+    if (loading) {
+        return (
+            <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f9fafb' }}>
+                <div style={{ width: 40, height: 40, border: '3px solid #e5e7eb', borderTopColor: '#059669', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
+            </div>
+        );
+    }
 
     return (
-        /* Body Background: Clean white with subtle slate gradient */
-        <div className="min-h-screen w-full flex items-center justify-center p-6 py-12 bg-emerald-100">
-            
-            {/* Main Card: White glass effect with emerald/black accents - Scale optimized for laptop */}
-            <div className="w-full max-w-5xl p-10 md:p-16 bg-emerald-50/60 backdrop-blur-3xl border border-emerald-100/50 rounded-[3rem] shadow-[0_20px_60px_-15px_rgba(16,185,129,0.1)] animate-[fadeIn_0.5s_ease-out_forwards] relative z-10">
-
-                {/* Header Section */}
-                <div className="text-center mb-16">
-                    <div className="w-20 h-20 mx-auto mb-6 flex items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-slate-900 text-white font-bold text-3xl shadow-xl shadow-emerald-500/20">
-                        TA
+        <div style={{ minHeight: '100vh', background: '#f9fafb', fontFamily: "'Inter', system-ui, sans-serif" }}>
+            {/* Header */}
+            <header style={{ background: '#fff', borderBottom: '1px solid #e5e7eb', position: 'sticky', top: 0, zIndex: 30 }}>
+                <div style={{ maxWidth: 1200, margin: '0 auto', padding: '0 32px', height: 56, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                        <div style={{ width: 32, height: 32, background: '#059669', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <span style={{ color: '#fff', fontWeight: 700, fontSize: 13 }}>T</span>
+                        </div>
+                        <span style={{ fontWeight: 600, color: '#111827', fontSize: 15 }}>Taxplan Advisor</span>
                     </div>
-                    {/* Dark Text Title */}
-                    <h1 className="text-4xl md:text-6xl font-extrabold text-slate-900 mb-4 tracking-tight">
-                        Onboarding Roadmap
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                        <span style={{ fontSize: 13, color: '#9ca3af' }}>{user?.email}</span>
+                        <button onClick={handleLogout} style={{ fontSize: 13, color: '#6b7280', fontWeight: 500, cursor: 'pointer', background: 'none', border: 'none', padding: '6px 12px', borderRadius: 6 }}
+                            onMouseEnter={e => e.target.style.color = '#dc2626'} onMouseLeave={e => e.target.style.color = '#6b7280'}>
+                            Sign Out
+                        </button>
+                    </div>
+                </div>
+            </header>
+
+            {/* Content */}
+            <div style={{ maxWidth: 1200, margin: '0 auto', padding: '40px 32px' }}>
+                {/* Welcome */}
+                <div style={{ marginBottom: 32 }}>
+                    <h1 style={{ fontSize: 26, fontWeight: 700, color: '#111827', margin: 0 }}>
+                        Welcome back, {user?.first_name || user?.email?.split('@')[0]}
                     </h1>
-                    <p className="text-slate-500 text-lg md:text-xl max-w-2xl mx-auto leading-relaxed">
-                        Welcome, <span className="text-emerald-600 font-bold">{user?.full_name || 'Consultant'}</span>.
-                        Please review the mandatory process below to activate your account.
+                    <p style={{ fontSize: 15, color: '#6b7280', marginTop: 6 }}>
+                        Complete the steps below to finish your consultant onboarding.
                     </p>
                 </div>
 
-                {/* Process Steps Container */}
-                <div className="relative">
-                    {/* Connecting Line: Slate color for visibility on white */}
-                    <div className="absolute left-[27px] top-10 bottom-10 w-0.5 bg-slate-200 hidden md:block z-0"></div>
+                {/* Steps */}
+                <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e5e7eb', overflow: 'hidden' }}>
+                    {steps.map((step, i) => {
+                        const isActive = i === currentStepIndex;
+                        const isLocked = !step.done && !isActive;
 
-                    <div className="space-y-12">
-                        {/* Step 1: Expertise */}
-                        <div className="flex flex-col md:flex-row items-start gap-8 relative group">
-                            {/* Number Circle: White bg with Green Border */}
-                            <div className="w-14 h-14 rounded-full bg-white border-2 border-emerald-500 text-emerald-600 flex items-center justify-center font-bold text-2xl shrink-0 z-10 shadow-lg shadow-emerald-100 transition-transform group-hover:scale-110">1</div>
-                            
-                            {/* Content Box: White with subtle border */}
-                            <div className="flex-1 p-8 rounded-2xl bg-emerald-50/80 border-slate-200 hover:border-emerald-500/30 hover:shadow-lg transition-all shadow-sm">
-                                <h3 className="text-2xl font-bold text-slate-900 mb-3">Select Domain Expertise</h3>
-                                <p className="text-slate-500 text-lg mb-6">Choose your primary area of consultation (GST, Income Tax, etc.).</p>
-                                <div className="flex flex-wrap gap-3">
-                                    {['GST', 'Income Tax', 'TDS', 'Registration'].map((tag) => (
-                                        <span key={tag} className="px-5 py-2 text-sm font-bold rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-100 uppercase tracking-wider">{tag}</span>
-                                    ))}
+                        return (
+                            <div key={i} style={{
+                                display: 'flex', alignItems: 'center', gap: 20,
+                                padding: '20px 28px',
+                                borderTop: i > 0 ? '1px solid #f3f4f6' : 'none',
+                                background: isActive ? '#f0fdf4' : '#fff',
+                                opacity: isLocked ? 0.45 : 1,
+                                transition: 'all 0.2s'
+                            }}>
+                                {/* Step number/check */}
+                                <div style={{
+                                    width: 44, height: 44, borderRadius: '50%', flexShrink: 0,
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    fontSize: 14, fontWeight: 700,
+                                    background: step.done ? '#dcfce7' : isActive ? '#059669' : '#f3f4f6',
+                                    color: step.done ? '#16a34a' : isActive ? '#fff' : '#9ca3af',
+                                }}>
+                                    {step.done ? '✓' : i + 1}
+                                </div>
+
+                                {/* Icon */}
+                                <span style={{ fontSize: 24, flexShrink: 0 }}>{step.icon}</span>
+
+                                {/* Text */}
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                    <h3 style={{
+                                        fontSize: 15, fontWeight: 600, margin: 0,
+                                        color: step.done ? '#16a34a' : isActive ? '#111827' : '#9ca3af'
+                                    }}>{step.label}</h3>
+                                    <p style={{ fontSize: 13, color: step.done ? '#86efac' : '#9ca3af', margin: '2px 0 0' }}>
+                                        {step.desc}
+                                    </p>
+                                </div>
+
+                                {/* Action */}
+                                <div style={{ flexShrink: 0 }}>
+                                    {step.done ? (
+                                        <span style={{ fontSize: 12, fontWeight: 600, color: '#16a34a', background: '#f0fdf4', border: '1px solid #bbf7d0', padding: '6px 14px', borderRadius: 20 }}>
+                                            ✓ Complete
+                                        </span>
+                                    ) : isActive && step.action ? (
+                                        <button onClick={step.action} style={{
+                                            fontSize: 13, fontWeight: 600, background: '#059669', color: '#fff',
+                                            padding: '10px 24px', borderRadius: 8, border: 'none', cursor: 'pointer',
+                                            transition: 'background 0.2s'
+                                        }}
+                                            onMouseEnter={e => e.target.style.background = '#047857'}
+                                            onMouseLeave={e => e.target.style.background = '#059669'}>
+                                            Start →
+                                        </button>
+                                    ) : (
+                                        step.customStatus || <span style={{ fontSize: 12, color: '#d1d5db', fontWeight: 500 }}>🔒 Locked</span>
+                                    )}
                                 </div>
                             </div>
-                        </div>
-
-                        {/* Step 2: Documentation */}
-                        <div className="flex flex-col md:flex-row items-start gap-8 relative group">
-                            <div className="w-14 h-14 rounded-full bg-white border-2 border-slate-900 text-slate-900 flex items-center justify-center font-bold text-2xl shrink-0 z-10 shadow-lg shadow-slate-200 transition-transform group-hover:scale-110">2</div>
-                            <div className="flex-1 p-8 rounded-2xl bg-emerald-50/80 border-slate-200 hover:border-slate-400/30 hover:shadow-lg transition-all shadow-sm">
-                                <h3 className="text-2xl font-bold text-slate-900 mb-3">PAN Verification & Qualification Upload</h3>
-                                <p className="text-slate-500 text-lg">Verify Pan and Upload valid educational certificates and professional documents.</p>
-                            </div>
-                        </div>
-
-                        {/* Step 3: Identity Verification */}
-                        <div className="flex flex-col md:flex-row items-start gap-8 relative group">
-                            <div className="w-14 h-14 rounded-full bg-white border-2 border-emerald-500 text-emerald-600 flex items-center justify-center font-bold text-2xl shrink-0 z-10 shadow-lg shadow-emerald-100 transition-transform group-hover:scale-110">3</div>
-                            <div className="flex-1 p-8 rounded-2xl bg-emerald-50/80 border-slate-200 hover:border-emerald-500/30 hover:shadow-lg transition-all shadow-sm">
-                                <h3 className="text-2xl font-bold text-slate-900 mb-3">Identity Verification</h3>
-                                <ul className="text-lg text-slate-500 space-y-4">
-                                    <li className="flex items-center gap-3"><div className="w-2 h-2 rounded-full bg-emerald-500"></div> Recent passport-size photograph</li>
-                                    <li className="flex items-center gap-3"><div className="w-2 h-2 rounded-full bg-emerald-500"></div> Live Photo Verification</li>
-                                </ul>
-                            </div>
-                        </div>
-
-                        {/* Step 4: Assessment */}
-                        <div className="flex flex-col md:flex-row items-start gap-8 relative group">
-                            <div className="w-14 h-14 rounded-full bg-white border-2 border-amber-500 text-amber-600 flex items-center justify-center font-bold text-2xl shrink-0 z-10 shadow-lg shadow-amber-100 transition-transform group-hover:scale-110">4</div>
-                            <div className="flex-1 p-8 rounded-2xl bg-emerald-50/80 border-slate-200 hover:border-amber-500/30 hover:shadow-lg transition-all shadow-sm">
-                                <h3 className="text-2xl font-bold text-slate-900 mb-4">Skill Assessment Test</h3>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                                    <div className="p-5 rounded-xl border bg-emerald-50/80 border-slate-200">
-                                        <span className="block text-amber-600 font-bold mb-1 uppercase text-xs tracking-widest">Part A</span>
-                                        <span className="block text-xl text-slate-900 font-semibold">Multiple Choice</span>
-                                        <span className="text-slate-500 text-base">45 Qs • 30s each</span>
-                                    </div>
-                                    <div className="p-5 rounded-xl border bg-emerald-50/80 border-slate-200">
-                                        <span className="block text-red-500 font-bold mb-1 uppercase text-xs tracking-widest">Part B</span>
-                                        <span className="block text-xl text-slate-900 font-semibold">Video Response</span>
-                                        <span className="text-slate-500 text-base">5 Qs • Verbal Answer • 1m 30s each </span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Step 5: Email Credentials */}
-                        <div className="flex flex-col md:flex-row items-start gap-8 relative group">
-                            <div className="w-14 h-14 rounded-full bg-white border-2 border-emerald-600 text-emerald-600 flex items-center justify-center font-bold text-2xl shrink-0 z-10 shadow-lg shadow-emerald-100 transition-transform group-hover:scale-110">5</div>
-                            <div className="flex-1 p-8 rounded-2xl bg-emerald-50/80 border-slate-200 hover:border-emerald-500/30 hover:shadow-lg transition-all shadow-sm">
-                                <h3 className="text-2xl font-bold text-slate-900 mb-3">Receive Login Credentials</h3>
-                                <p className="text-slate-500 text-lg">
-                                    Upon successful verification, credentials will be sent to: <span className="text-emerald-600 font-bold underline decoration-emerald-200">{user?.email || 'advaitasanoj@gmail.com'}</span>.
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Footer Actions */}
-                <div className="mt-20 flex flex-col md:flex-row gap-6 justify-center">
-                    <button onClick={handleLogout} className="px-12 py-4 rounded-2xl border-2 border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-900 hover:border-slate-300 transition-all text-lg font-bold">Sign Out</button>
-                    <button onClick={handleProceed} className="px-16 py-4 rounded-2xl bg-gradient-to-r from-emerald-600 to-slate-900 text-white hover:from-emerald-500 hover:to-slate-800 shadow-[0_15px_40px_rgba(16,185,129,0.3)] hover:-translate-y-1 active:translate-y-0 transition-all text-xl font-extrabold flex items-center justify-center gap-3">
-                        Start Process
-                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 7l5 5m0 0l-5 5m5-5H6" /></svg>
-                    </button>
+                        );
+                    })}
                 </div>
             </div>
 
-            {/* Background Orbs: Green and Grey/Black */}
-            <div className="fixed top-0 left-0 w-full h-full pointer-events-none overflow-hidden -z-10">
-                <div className="absolute top-[-10%] right-[-10%] w-[1000px] h-[1000px] bg-emerald-500/5 rounded-full blur-[180px]"></div>
-                <div className="absolute bottom-[-10%] left-[-10%] w-[1000px] h-[1000px] bg-slate-900/5 rounded-full blur-[180px]"></div>
-            </div>
+            {stepFlags?.has_documents && assessmentPassed && isVerified && hasIdentity && (
+                <div style={{ marginTop: 32, textAlign: 'center', background: '#ecfdf5', borderRadius: 12, padding: 24, border: '1px solid #d1fae5' }}>
+                    <div style={{ fontSize: 40, marginBottom: 12 }}>🎉</div>
+                    <h2 style={{ fontSize: 18, fontWeight: 700, color: '#065f46', margin: '0 0 8px' }}>Onboarding Complete!</h2>
+                    <p style={{ fontSize: 15, color: '#047857', margin: 0, lineHeight: 1.6 }}>
+                        You have completed the onboarding process. Once verification is complete, you will receive your login credentials on your email ID.
+                    </p>
+                </div>
+            )}
         </div>
     );
 };
