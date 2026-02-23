@@ -1,104 +1,80 @@
-import { GoogleLogin } from '@react-oauth/google';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
+import { GoogleLogin } from '@react-oauth/google';
 import { googleAuth } from '../services/api';
+import { useAuth } from '../context/AuthContext';
 
 const Login = () => {
     const navigate = useNavigate();
     const { login } = useAuth();
+    const [error, setError] = useState('');
 
     const handleGoogleSuccess = async (credentialResponse) => {
         try {
             const data = await googleAuth(credentialResponse.credential);
             login(data.user);
-
-            // Redirect based on onboarding status
             if (data.needs_onboarding) {
                 navigate('/onboarding');
             } else {
                 navigate('/success');
             }
-        } catch (error) {
-            console.error('Login failed:', error);
-            alert('Login failed. Please try again.');
+        } catch (err) {
+            setError('Authentication failed. Please try again.');
+            console.error('Login error:', err);
         }
     };
 
-    const handleGoogleError = () => {
-        console.error('Google Sign-In Failed');
-        alert('Google Sign-In failed. Please try again.');
-    };
-return (
-        /* Body Background: Clean white with subtle slate gradient */
-        <div className="min-h-screen flex items-center justify-center p-6 bg-emerald-100">
-            
-            {/* Main Card: White glass effect with green/black accents */}
-            <div className="w-full max-w-xl p-10 md:p-16 bg-emerald-50/80 backdrop-blur-xl border border-emerald-100/50 rounded-[2rem] shadow-[0_20px_40px_-15px_rgba(16,185,129,0.15)] animate-[fadeIn_0.5s_ease-out_forwards] relative z-10">
-                
-                {/* Logo & Header */}
-                <div className="text-center mb-10">
-                    <div className="flex items-center justify-center gap-4 mb-8">
-                        {/* Logo Icon: Green to Black Gradient */}
-                        <div className="w-16 h-16 flex items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-slate-900 text-white font-bold text-2xl shadow-lg shadow-emerald-500/20">
-                            TA
-                        </div>
-                        <h1 className="text-4xl font-extrabold text-slate-900 tracking-tight">
-                            TaxplanAdvisor
-                        </h1>
+    return (
+        <div style={{ minHeight: '100vh', background: '#f9fafb', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, fontFamily: "'Inter', system-ui, sans-serif" }}>
+            <div style={{ width: '100%', maxWidth: 420 }}>
+                {/* Logo */}
+                <div style={{ textAlign: 'center', marginBottom: 32 }}>
+                    <div style={{
+                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                        width: 52, height: 52, background: '#059669', borderRadius: 14, marginBottom: 16,
+                    }}>
+                        <span style={{ color: '#fff', fontWeight: 800, fontSize: 20 }}>T</span>
                     </div>
-                    
-                    {/* Gradient Text: Green to Black */}
-                    <h2 className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-emerald-600 to-slate-800 bg-clip-text text-transparent mb-4">
-                        Consultant Onboarding
-                    </h2>
-                    
-                    <p className="text-slate-500 text-lg">
-                        Sign in to begin your registration as a consultant
-                    </p>
+                    <h1 style={{ fontSize: 22, fontWeight: 700, color: '#111827', margin: 0 }}>Taxplan Advisor</h1>
+                    <p style={{ fontSize: 14, color: '#9ca3af', marginTop: 4 }}>Consultant Onboarding Portal</p>
                 </div>
 
-                {/* Divider */}
-                <div className="relative my-10">
-                    <div className="absolute inset-0 flex items-center">
-                        <div className="w-full border-t border-slate-200"></div>
-                    </div>
-                    <div className="relative flex justify-center text-sm">
-                        <span className="px-4 bg-white text-slate-400 uppercase tracking-widest font-bold border border-slate-100 rounded-full">
-                            Continue with
-                        </span>
-                    </div>
-                </div>
+                {/* Card */}
+                <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #e5e7eb', padding: 32, boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+                    <h2 style={{ fontSize: 18, fontWeight: 700, color: '#111827', textAlign: 'center', margin: '0 0 4px' }}>Welcome</h2>
+                    <p style={{ fontSize: 14, color: '#9ca3af', textAlign: 'center', marginBottom: 28 }}>Sign in with your Google account to get started</p>
 
-                {/* Google Sign In Container - Scaled up */}
-                <div className="flex justify-center py-4">
-                    <div className="transform scale-110 md:scale-125 transition-transform hover:scale-[1.3] duration-300">
+                    <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 20 }}>
                         <GoogleLogin
                             onSuccess={handleGoogleSuccess}
-                            onError={handleGoogleError}
-                            theme="outline" // Changed to 'outline' or 'filled_black' looks better on white
+                            onError={() => setError('Login failed')}
+                            theme="outline"
+                            shape="rectangular"
                             size="large"
-                            width="320"
-                            text="signin_with"
-                            shape="pill" 
+                            width="350"
                         />
                     </div>
-                </div>
-                 
-                {/* Footer Note */}
-                <p className="text-center text-xs text-slate-400 mt-12 leading-relaxed font-medium">
-                    By signing in, you agree to our <br />
-                    <span className="text-emerald-600 underline cursor-pointer hover:text-emerald-800 transition-colors">Terms of Service</span> and <span className="text-emerald-600 underline cursor-pointer hover:text-emerald-800 transition-colors">Privacy Policy</span>
-                </p>
-            </div>
 
-            {/* Background Orbs: Green and Black/Grey */}
-            <div className="fixed top-0 left-0 w-full h-full pointer-events-none -z-10 overflow-hidden">
-                <div className="absolute top-[-10%] left-[-10%] w-[600px] h-[600px] bg-emerald-500/5 rounded-full blur-[100px]"></div>
-                <div className="absolute bottom-[-10%] right-[-10%] w-[600px] h-[600px] bg-slate-900/5 rounded-full blur-[100px]"></div>
+                    {error && (
+                        <p style={{ color: '#dc2626', fontSize: 14, textAlign: 'center', background: '#fef2f2', borderRadius: 8, padding: '8px 16px', marginTop: 16 }}>{error}</p>
+                    )}
+
+                    <div style={{ marginTop: 24, paddingTop: 24, borderTop: '1px solid #f3f4f6' }}>
+                        {['End-to-end encrypted', 'Google verified identity', 'Data securely stored'].map((text, i) => (
+                            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, color: '#6b7280', marginBottom: i < 2 ? 10 : 0 }}>
+                                <span style={{ color: '#059669', fontSize: 14 }}>✓</span>
+                                <span>{text}</span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
+                <p style={{ textAlign: 'center', color: '#9ca3af', fontSize: 12, marginTop: 24 }}>
+                    By signing in, you agree to our Terms of Service and Privacy Policy.
+                </p>
             </div>
         </div>
     );
-
 };
 
 export default Login;
