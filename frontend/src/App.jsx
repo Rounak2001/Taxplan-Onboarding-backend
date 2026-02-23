@@ -4,55 +4,102 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import Login from './pages/Login';
 import Onboarding from './pages/Onboarding';
 import Success from './pages/Success';
-import ExpertiseSelection from './pages/ExpertiseSelection';
 import DocumentUpload from './pages/DocumentUpload';
-import PANVerification from './pages/PANVerification';
 import FaceVerification from './pages/FaceVerification';
+import IdentityVerification from './pages/IdentityVerification';
+import TestList from './pages/assessment/TestList';
+import Instructions from './pages/assessment/Instructions';
+import TestEngine from './pages/assessment/TestEngine';
+import AssessmentResult from './pages/assessment/AssessmentResult';
+import OnboardingComplete from './pages/OnboardingComplete';
+import AdminLogin from './pages/admin/AdminLogin';
+import AdminDashboard from './pages/admin/AdminDashboard';
+import ConsultantDetail from './pages/admin/ConsultantDetail';
 import './index.css';
 
-// Google Client ID
-const GOOGLE_CLIENT_ID = '671713935730-o56g346e7pd60k9pqbk9rr2pup9era6v.apps.googleusercontent.com';
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 
-// Protected Route component
-const ProtectedRoute = ({ children, requireOnboarding = false }) => {
-  const { isAuthenticated, user, loading } = useAuth();
-
+// Protected Route — requires authentication
+const ProtectedRoute = ({ children }) => {
+  const { isAuthenticated, loading } = useAuth();
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-purple-500"></div>
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="animate-spin rounded-full h-10 w-10 border-3 border-gray-200 border-t-emerald-600"></div>
       </div>
     );
   }
-
-  if (!isAuthenticated) {
-    return <Navigate to="/" replace />;
-  }
-
-  // If user needs onboarding and we're not on the onboarding page
-  if (requireOnboarding && user && !user.is_onboarded) {
-    return <Navigate to="/onboarding" replace />;
-  }
-
+  if (!isAuthenticated) return <Navigate to="/" replace />;
   return children;
 };
 
-// Public Route - redirect to appropriate page if logged in
+// Public Route — redirect if already logged in
 const PublicRoute = ({ children }) => {
   const { isAuthenticated, user, loading } = useAuth();
-
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-purple-500"></div>
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="animate-spin rounded-full h-10 w-10 border-3 border-gray-200 border-t-emerald-600"></div>
+      </div>
+    );
+  }
+  if (isAuthenticated) {
+    if (user && !user.is_onboarded) return <Navigate to="/onboarding" replace />;
+    return <Navigate to="/success" replace />;
+  }
+  return children;
+};
+
+
+const StepGuard = ({ step, children }) => {
+  const { user, stepFlags, loading } = useAuth();
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="animate-spin rounded-full h-10 w-10 border-3 border-gray-200 border-t-emerald-600"></div>
       </div>
     );
   }
 
-  if (isAuthenticated) {
-    if (user && !user.is_onboarded) {
-      return <Navigate to="/onboarding" replace />;
-    }
+  // Step requirements (each requires all previous to be true)
+  // Step 1: Profile (onboarding) — no prereqs, just authenticated
+  // Step 2: Identity — requires is_onboarded
+  // Step 3: Face — requires is_onboarded + has_identity_doc
+  // Step 4: Assessment — requires is_onboarded + is_verified
+  // Step 5: Documents — requires is_onboarded + has_passed_assessment
+
+  const onboarded = user?.is_onboarded;
+  const hasIdentity = stepFlags?.has_identity_doc;
+  const verified = user?.is_verified;
+  const passedAssessment = stepFlags?.has_passed_assessment;
+
+  let allowed = false;
+  switch (step) {
+    case 'onboarding':
+      allowed = !onboarded; 
+      break;
+    case 'identity':
+      allowed = onboarded && !hasIdentity; 
+      break;
+    case 'face':
+      allowed = onboarded && hasIdentity && !verified;
+      break;
+    case 'assessment':
+      allowed = onboarded && verified;
+      break;
+    case 'documents':
+      allowed = onboarded && passedAssessment;
+      break;
+    case 'dashboard':
+      allowed = onboarded; 
+      break;
+    default:
+      allowed = true;
+  }
+
+  if (!allowed) {
+    
+    if (!onboarded) return <Navigate to="/onboarding" replace />;
     return <Navigate to="/success" replace />;
   }
 
@@ -62,63 +109,42 @@ const PublicRoute = ({ children }) => {
 function AppRoutes() {
   return (
     <Routes>
-      <Route
-        path="/"
-        element={
-          <PublicRoute>
-            <Login />
-          </PublicRoute>
-        }
-      />
-      <Route
-        path="/onboarding"
-        element={
-          <ProtectedRoute>
-            <Onboarding />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/success"
-        element={
-          <ProtectedRoute requireOnboarding>
-            <Success />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/onboarding/expertise"
-        element={
-          <ProtectedRoute requireOnboarding>
-            <ExpertiseSelection />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/onboarding/pan-verification"
-        element={
-          <ProtectedRoute requireOnboarding>
-            <PANVerification />
-          </ProtectedRoute>
-        }
-      />
+      <Route path="/" element={<PublicRoute><Login /></PublicRoute>} />
+      <Route path="/onboarding" element={
+        <ProtectedRoute><StepGuard step="onboarding"><Onboarding /></StepGuard></ProtectedRoute>
+      } />
+      <Route path="/success" element={
+        <ProtectedRoute><StepGuard step="dashboard"><Success /></StepGuard></ProtectedRoute>
+      } />
+      <Route path="/onboarding/identity" element={
+        <ProtectedRoute><StepGuard step="identity"><IdentityVerification /></StepGuard></ProtectedRoute>
+      } />
+      <Route path="/onboarding/face-verification" element={
+        <ProtectedRoute><StepGuard step="face"><FaceVerification /></StepGuard></ProtectedRoute>
+      } />
+      <Route path="/assessment/select" element={
+        <ProtectedRoute><StepGuard step="assessment"><TestList /></StepGuard></ProtectedRoute>
+      } />
+      <Route path="/assessment/instructions" element={
+        <ProtectedRoute><StepGuard step="assessment"><Instructions /></StepGuard></ProtectedRoute>
+      } />
+      <Route path="/assessment/test" element={
+        <ProtectedRoute><StepGuard step="assessment"><TestEngine /></StepGuard></ProtectedRoute>
+      } />
+      <Route path="/assessment/result" element={
+        <ProtectedRoute><AssessmentResult /></ProtectedRoute>
+      } />
+      <Route path="/onboarding/documentation" element={
+        <ProtectedRoute><StepGuard step="documents"><DocumentUpload /></StepGuard></ProtectedRoute>
+      } />
+      <Route path="/onboarding/complete" element={
+        <ProtectedRoute><OnboardingComplete /></ProtectedRoute>
+      } />
 
-      <Route
-        path="/onboarding/documentation"
-        element={
-          <ProtectedRoute requireOnboarding>
-            <DocumentUpload />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/onboarding/face-verification"
-        element={
-          <ProtectedRoute requireOnboarding>
-            <FaceVerification />
-          </ProtectedRoute>
-        }
-      />
+      {/* Admin Panel Routes — standalone, no auth guards */}
+      <Route path="/admin" element={<AdminLogin />} />
+      <Route path="/admin/dashboard" element={<AdminDashboard />} />
+      <Route path="/admin/consultant/:id" element={<ConsultantDetail />} />
 
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
