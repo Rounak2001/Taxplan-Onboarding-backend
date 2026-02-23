@@ -35,22 +35,27 @@ class User(AbstractBaseUser, PermissionsMixin):
     google_id = models.CharField(max_length=255, unique=True, null=True, blank=True)
     
     # Onboarding fields
-    full_name = models.CharField(max_length=255, blank=True)
+    first_name = models.CharField(max_length=100, blank=True)
+    middle_name = models.CharField(max_length=100, blank=True)
+    last_name = models.CharField(max_length=100, blank=True)
+    
     age = models.PositiveIntegerField(null=True, blank=True)
     dob = models.DateField(null=True, blank=True)
     phone_number = models.CharField(max_length=20, blank=True)
-    address = models.TextField(blank=True)
     
+    # Address Split
+    address_line1 = models.CharField(max_length=255, blank=True)
+    address_line2 = models.CharField(max_length=255, blank=True)
+    city = models.CharField(max_length=100, blank=True)
+    state = models.CharField(max_length=100, blank=True)
+    pincode = models.CharField(max_length=20, blank=True)
+    
+
     # Practice Details
     PRACTICE_TYPE_CHOICES = [
         ('Individual', 'Individual'),
-        ('LLP', 'LLP'),
-        ('Firm', 'Firm'),
-        ('Partnership', 'Partnership'),
-        ('Company', 'Company'),
     ]
     practice_type = models.CharField(max_length=50, choices=PRACTICE_TYPE_CHOICES, null=True, blank=True)
-    business_name = models.CharField(max_length=255, null=True, blank=True)
     years_of_experience = models.PositiveIntegerField(null=True, blank=True)
     
     # Status fields
@@ -77,22 +82,66 @@ class User(AbstractBaseUser, PermissionsMixin):
         return self.email
     
     def get_full_name(self):
-        return self.full_name or self.email
+        parts = [self.first_name, self.middle_name, self.last_name]
+        return " ".join(filter(None, parts)) or self.email
     
     def get_short_name(self):
-        return self.full_name.split()[0] if self.full_name else self.email.split('@')[0]
+        return self.first_name if self.first_name else self.email.split('@')[0]
 
 
-class ConsultantExpertise(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='expertise')
-    domain = models.CharField(max_length=100) 
-    service = models.CharField(max_length=200) 
+
+
+
+class ConsultantDocument(models.Model):
+    DOCUMENT_TYPES = [
+        ('Qualification', 'Qualification Degree'),
+        ('Certificate', 'Certificate'),
+        ('bachelors_degree', "Bachelor's Degree"),
+        ('masters_degree', "Master's Degree"),
+        ('certificate', 'Certificate (Additional)'),
+    ]
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='documents')
+    document_type = models.CharField(max_length=50, choices=DOCUMENT_TYPES)
+    title = models.CharField(max_length=255, blank=True)
+    file = models.FileField(upload_to='consultant_documents/')
+    uploaded_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        db_table = 'consultant_expertise'
-        unique_together = ('user', 'domain', 'service')
-        verbose_name = 'Consultant Expertise'
-        verbose_name_plural = 'Consultant Expertises'
+        db_table = 'consultant_documents'
+        verbose_name = 'Consultant Document'
+        verbose_name_plural = 'Consultant Documents'
+        ordering = ['-uploaded_at']
+
+
+class IdentityDocument(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='identity_documents')
+    file_path = models.CharField(max_length=500)
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+    
+    # Gemini Verification Fields
+    document_type = models.CharField(max_length=100, blank=True, null=True, help_text="Type of document identified by Gemini (e.g., Aadhaar, PAN)")
+    verification_status = models.CharField(max_length=50, blank=True, null=True, help_text="Verification status from Gemini (e.g., Verified, Invalid)")
+    gemini_raw_response = models.TextField(blank=True, null=True, help_text="Raw JSON response from Gemini")
+
+    class Meta:
+        db_table = 'identity_documents'
+        ordering = ['-uploaded_at']
 
     def __str__(self):
-        return f"{self.user.email} - {self.service}"
+        return f"{self.user.email} - Identity Document"
+
+
+class ConsultantCredential(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='credentials')
+    username = models.CharField(max_length=150, unique=True)
+    password = models.CharField(max_length=255)  
+    generated_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'consultant_credentials'
+        verbose_name = 'Consultant Credential'
+        verbose_name_plural = 'Consultant Credentials'
+
+    def __str__(self):
+        return f"Credentials for {self.user.email}"

@@ -1,11 +1,8 @@
 from rest_framework import serializers
-from .models import User, ConsultantExpertise
+from .models import User, ConsultantDocument
 
 
-class ConsultantExpertiseSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = ConsultantExpertise
-        fields = ['domain', 'service']
+
 
 
 
@@ -16,9 +13,11 @@ class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = [
-            'id', 'email', 'full_name', 'age', 'dob', 
-            'phone_number', 'address', 'is_verified', 
-            'is_onboarded', 'created_at'
+            'id', 'email', 'first_name', 'middle_name', 'last_name', 
+            'age', 'dob', 'phone_number', 
+            'address_line1', 'address_line2', 'city', 'state', 'pincode', 
+            'practice_type', 'years_of_experience',
+            'is_verified', 'is_onboarded', 'created_at'
         ]
         read_only_fields = ['id', 'email', 'is_verified', 'created_at']
 
@@ -33,11 +32,21 @@ class OnboardingSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = User
-        fields = ['full_name', 'age', 'dob', 'phone_number', 'address', 'practice_type', 'business_name', 'years_of_experience']
+        fields = [
+            'first_name', 'middle_name', 'last_name', 
+            'age', 'dob', 'phone_number', 
+            'address_line1', 'address_line2', 'city', 'state', 'pincode',
+            'practice_type', 'years_of_experience'
+        ]
     
-    def validate_full_name(self, value):
+    def validate_first_name(self, value):
         if not value or len(value.strip()) < 2:
-            raise serializers.ValidationError('Full name is required and must be at least 2 characters')
+            raise serializers.ValidationError('First name is required')
+        return value.strip()
+
+    def validate_last_name(self, value):
+        if not value or len(value.strip()) < 1:
+            raise serializers.ValidationError('Last name is required')
         return value.strip()
     
     def validate_age(self, value):
@@ -50,18 +59,27 @@ class OnboardingSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError('Valid phone number is required')
         return value.strip()
     
-    def validate_address(self, value):
-        if not value or len(value.strip()) < 10:
-            raise serializers.ValidationError('Please enter a complete address')
+    def validate_address_line1(self, value):
+        if not value or len(value.strip()) < 5:
+            raise serializers.ValidationError('Address Line 1 is required')
+        return value.strip()
+        
+    def validate_city(self, value):
+        if not value:
+            raise serializers.ValidationError('City is required')
         return value.strip()
 
-    def validate(self, data):
-        practice_type = data.get('practice_type')
-        business_name = data.get('business_name')
-        
-        if practice_type and practice_type != 'Individual' and not business_name:
-             raise serializers.ValidationError({'business_name': 'Business name is required for non-Individual practice types.'})
-        return data
+    def validate_state(self, value):
+        if not value:
+            raise serializers.ValidationError('State is required')
+        return value.strip()
+
+    def validate_pincode(self, value):
+        if not value or len(value.strip()) < 6:
+            raise serializers.ValidationError('Valid Pincode is required')
+        return value.strip()
+
+
     
     def update(self, instance, validated_data):
         for attr, value in validated_data.items():
@@ -69,3 +87,10 @@ class OnboardingSerializer(serializers.ModelSerializer):
         instance.is_onboarded = True
         instance.save()
         return instance
+
+
+class ConsultantDocumentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ConsultantDocument
+        fields = ['id', 'document_type', 'title', 'file', 'uploaded_at']
+        read_only_fields = ['id', 'uploaded_at']

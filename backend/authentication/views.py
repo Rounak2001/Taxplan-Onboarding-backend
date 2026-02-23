@@ -1,18 +1,25 @@
+import uuid
 from django.conf import settings
-from rest_framework import status
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework import status, viewsets
+from rest_framework.decorators import api_view, permission_classes, authentication_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
+from django.contrib.auth import get_user_model
 from google.oauth2 import id_token
-from google.auth.transport import requests as google_requests
+from google.auth.transport import requests as google_requests 
 
-from .models import User, ConsultantExpertise
-from .serializers import UserSerializer, GoogleAuthSerializer, OnboardingSerializer, ConsultantExpertiseSerializer
+from .models import User, IdentityDocument
+from .serializers import UserSerializer, GoogleAuthSerializer, OnboardingSerializer, ConsultantDocumentSerializer
 from .authentication import generate_jwt_token
+from utils.supabase_client import get_supabase_client
+from consultant_documents.models import ConsultantDocument as RealConsultantDocument
+
+User = get_user_model()
 
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
+@authentication_classes([])
 def google_auth(request):
     """
     Authenticate user via Google OAuth token.
@@ -29,7 +36,8 @@ def google_auth(request):
         idinfo = id_token.verify_oauth2_token(
             token, 
             google_requests.Request(), 
-            settings.GOOGLE_CLIENT_ID
+            settings.GOOGLE_CLIENT_ID,
+            clock_skew_in_seconds=10
         )
         
         email = idinfo.get('email')
@@ -42,12 +50,17 @@ def google_auth(request):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Get or create user
+     
+        name_parts = name.split()
+        first_name = name_parts[0] if name_parts else ''
+        last_name = " ".join(name_parts[1:]) if len(name_parts) > 1 else ''
+
         user, created = User.objects.get_or_create(
             email=email,
             defaults={
                 'google_id': google_id,
-                'full_name': name,
+                'first_name': first_name,
+                'last_name': last_name,
             }
         )
         
@@ -114,9 +127,27 @@ def complete_onboarding(request):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def get_user_profile(request):
-    """Get current user's profile"""
+    """Get current user's profile with step completion flags"""
+    user = request.user
+    has_identity_doc = IdentityDocument.objects.filter(user=user).exists()
+
+    
+    has_passed_assessment = False
+    try:
+        from assessment.models import UserSession
+        latest_session = UserSession.objects.filter(user=user, status='completed').order_by('-end_time').first()
+        if latest_session and latest_session.score >= 10:
+            has_passed_assessment = True
+    except Exception:
+        pass
+
+    has_documents = RealConsultantDocument.objects.filter(user=user).exists()
+
     return Response({
-        'user': UserSerializer(request.user).data,
+        'user': UserSerializer(user).data,
+        'has_identity_doc': has_identity_doc,
+        'has_passed_assessment': has_passed_assessment,
+        'has_documents': has_documents,
     }, status=status.HTTP_200_OK)
 
 
@@ -136,51 +167,90 @@ def health_check(request):
     return Response({'status': 'ok'}, status=status.HTTP_200_OK)
 
 
+
+
+
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
-def save_expertise(request):
+def upload_document(request):
     """
-    Save consultant expertise.
-    Expected format: 
-    {
-        "expertise": [
-            {"domain": "GST", "services": ["Registration", "Filing"]},
-            ...
-        ]
-    }
+    Upload consultant documents (Qualification or Certificate).
+    Enforces limit of 5 certificates.
     """
     user = request.user
-    expertise_data = request.data.get('expertise', [])
-    
-    if not expertise_data:
-        return Response({'error': 'No expertise data provided'}, status=status.HTTP_400_BAD_REQUEST)
+    document_type = request.data.get('document_type')
 
-    # validate structure
-    if not isinstance(expertise_data, list):
-         return Response({'error': 'Invalid format. "expertise" must be a list.'}, status=status.HTTP_400_BAD_REQUEST)
+    if document_type in ('Certificate', 'certificate'):
+        # Check existing certificate count
+        cert_count = user.documents.filter(document_type__in=['Certificate', 'certificate']).count()
+        if cert_count >= 5:
+            return Response(
+                {'error': 'You can upload a maximum of 5 certificates.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+    serializer = ConsultantDocumentSerializer(data=request.data)
+    if serializer.is_valid():
+        serializer.save(user=user)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_user_documents(request):
+    """Get all documents uploaded by the user"""
+    documents = request.user.documents.all()
+    serializer = ConsultantDocumentSerializer(documents, many=True)
+    return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def upload_identity_document(request):
+    """
+    Upload identity document to Supabase and verify with Gemini.
+    """
+    user = request.user
+    uploaded_file = request.FILES.get('identity_document')
+    
+    if not uploaded_file:
+        return Response({"error": "No document uploaded"}, status=status.HTTP_400_BAD_REQUEST)
 
     try:
-        # Clear existing expertise for full update (simplest strategy)
-        ConsultantExpertise.objects.filter(user=user).delete()
+
+        file_ext = uploaded_file.name.split('.')[-1]
+        file_path = f"identity_documents/{user.id}/identity_{uuid.uuid4()}.{file_ext}"
         
-        new_entries = []
-        for item in expertise_data:
-            domain = item.get('domain')
-            services = item.get('services', [])
-            
-            if not domain or not services:
-                continue
-                
-            for service in services:
-                new_entries.append(ConsultantExpertise(
-                    user=user,
-                    domain=domain,
-                    service=service
-                ))
+        # Save to S3 via default storage
+        from django.core.files.storage import default_storage
+        saved_path = default_storage.save(file_path, uploaded_file)
+
+        # Create database record
+        identity_doc = IdentityDocument.objects.create(
+            user=user,
+            file_path=saved_path
+        )
         
-        ConsultantExpertise.objects.bulk_create(new_entries)
+        # Verify with Gemini
+        from ai_analysis.services import IdentityDocumentVerifier
+        verifier = IdentityDocumentVerifier()
+        result = verifier.verify_document(identity_doc)
         
-        return Response({'message': 'Expertise saved successfully'}, status=status.HTTP_200_OK)
-        
+        # Save Gemini results
+        identity_doc.document_type = result.get('document_type')
+        identity_doc.verification_status = result.get('verification_status')
+        identity_doc.gemini_raw_response = result.get('raw_response')
+        identity_doc.save()
+
+        return Response({
+            "message": "Identity document uploaded and verified successfully", 
+            "path": saved_path,
+            "verification": {
+                "document_type": identity_doc.document_type,
+                "status": identity_doc.verification_status
+            }
+        }, status=status.HTTP_200_OK)
+
     except Exception as e:
-        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
