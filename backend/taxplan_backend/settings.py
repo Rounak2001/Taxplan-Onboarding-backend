@@ -29,14 +29,14 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    # Third party
     'rest_framework',
     'corsheaders',
-    # Local apps
     'authentication',
-    'sandbox_integration',
     'consultant_documents',
     'face_verification',
+    'assessment',
+    'admin_panel',
+    'ai_analysis',
 ]
 
 MIDDLEWARE = [
@@ -102,6 +102,7 @@ LANGUAGE_CODE = 'en-us'
 AWS_ACCESS_KEY_ID = os.getenv('AWS_ACCESS_KEY_ID')
 AWS_SECRET_ACCESS_KEY = os.getenv('AWS_SECRET_ACCESS_KEY')
 AWS_REGION = os.getenv('AWS_REGION', 'ap-south-1')
+AWS_STORAGE_BUCKET_NAME = os.getenv('AWS_STORAGE_BUCKET_NAME', 'taxplan-advisor-storage')
 USE_I18N = True
 USE_TZ = True
 
@@ -136,12 +137,41 @@ GOOGLE_CLIENT_ID = os.getenv('GOOGLE_CLIENT_ID')
 JWT_SECRET_KEY = SECRET_KEY
 JWT_EXPIRY_HOURS = 3
 
-# Sandbox API
-SANDBOX_API_KEY = os.getenv('SANDBOX_API_KEY')
-SANDBOX_API_SECRET = os.getenv('SANDBOX_API_SECRET')
-SANDBOX_BASE_URL = "https://api.sandbox.co.in"
 
-# Supabase Storage
-SUPABASE_URL = os.getenv('SUPABASE_URL')
-SUPABASE_KEY = os.getenv('SUPABASE_KEY')
 
+
+# AWS S3 Storage
+STORAGES = {
+    "default": {
+        "BACKEND": "storages.backends.s3boto3.S3Boto3Storage",
+        "OPTIONS": {
+            "bucket_name": os.getenv('AWS_STORAGE_BUCKET_NAME', 'taxplan-advisor-storage'),
+            "region_name": os.getenv('AWS_REGION', 'ap-south-1'),
+            "signature_version": "s3v4",
+            "addressing_style": "virtual",
+            "querystring_auth": True, 
+            "querystring_expire": 3600, 
+        },
+    },
+    "staticfiles": {
+        "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
+    },
+}
+
+
+# Email Configuration (Gmail)
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'smtp.gmail.com'
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER')
+EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD')
+DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
+
+# Celery Configuration
+CELERY_BROKER_URL = 'redis://localhost:6379/0'
+CELERY_RESULT_BACKEND = 'redis://localhost:6379/1'
+CELERY_ACCEPT_CONTENT = ['application/json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = 'UTC'
