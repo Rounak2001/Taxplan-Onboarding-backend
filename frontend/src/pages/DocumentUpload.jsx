@@ -1,197 +1,226 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
 import { uploadDocument } from '../services/api';
 
-const QUALIFICATION_REQUIREMENTS = {
-    'Chartered Accountant (CA)': [
-        { name: 'CA Degree Certificate', required: true },
-        { name: 'ICAI Membership Certificate', required: true }
-    ],
-    'Company Secretary (CS)': [
-        { name: 'CS Degree Certificate', required: true },
-        { name: 'ICSI Membership Certificate', required: true }
-    ],
-    'Cost & Management Accountant (CMA)': [
-        { name: 'CMA Degree Certificate', required: true }
-    ],
-    'Advocate (Tax Law)': [
-        { name: 'LLB Degree Certificate', required: true },
-        { name: 'Bar Council Enrollment Certificate', required: true }
-    ],
-    'GST Practitioner (GSTP)': [
-        { name: 'GST Practitioner Certificate', required: true }
-    ],
-    'Graduate': [
-        { name: 'Graduate Degree Certificate', required: true },
-        { name: 'Post Graduate Degree Certificate', required: false }
-    ]
-};
-
 const DocumentUpload = () => {
-    const { logout } = useAuth();
     const navigate = useNavigate();
-    const [qualificationType, setQualificationType] = useState('');
-    const [files, setFiles] = useState({});
+
+    // Individual file states
+    const [bachelors, setBachelors] = useState(null);
+    const [masters, setMasters] = useState(null);
+    const [certificates, setCertificates] = useState([]);
     const [uploading, setUploading] = useState(false);
-    const [error, setError] = useState(null);
-    const [success, setSuccess] = useState(false);
+    const [uploadProgress, setUploadProgress] = useState('');
+    const [error, setError] = useState('');
 
-    const handleQualificationChange = (e) => {
-        setQualificationType(e.target.value);
-        setFiles({}); // Reset files when qualification changes
-        setError(null);
-        setSuccess(false);
+    const bachelorRef = useRef(null);
+    const masterRef = useRef(null);
+    const certRef = useRef(null);
+
+    const validateFile = (file) => {
+        const allowed = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
+        if (!allowed.includes(file.type)) return 'Only PDF, JPG, PNG allowed.';
+        if (file.size > 10 * 1024 * 1024) return 'File must be under 10MB.';
+        return null;
     };
 
-    const handleFileChange = (documentType, file) => {
-        setFiles(prev => ({ ...prev, [documentType]: file }));
+    const handleBachelors = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const err = validateFile(file);
+        if (err) { setError(err); return; }
+        setError(''); setBachelors(file);
     };
 
-    const handleLogout = async () => {
-        await logout();
-        navigate('/');
+    const handleMasters = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const err = validateFile(file);
+        if (err) { setError(err); return; }
+        setError(''); setMasters(file);
     };
 
-    const handleSubmit = async () => {
-        if (!qualificationType) {
-            setError("Please select a qualification type.");
-            return;
+    const handleCertificates = (e) => {
+        const newFiles = Array.from(e.target.files);
+        if (certificates.length + newFiles.length > 5) { setError('Maximum 5 certificates allowed.'); return; }
+        for (const f of newFiles) {
+            const err = validateFile(f);
+            if (err) { setError(err); return; }
         }
+        setError('');
+        setCertificates(prev => [...prev, ...newFiles]);
+    };
 
-        const requiredDocs = QUALIFICATION_REQUIREMENTS[qualificationType];
-        const missingDocs = requiredDocs
-            .filter(doc => doc.required && !files[doc.name])
-            .map(doc => doc.name);
+    const removeCert = (i) => setCertificates(prev => prev.filter((_, idx) => idx !== i));
 
-        if (missingDocs.length > 0) {
-            setError(`Please upload all required documents: ${missingDocs.join(', ')}`);
-            return;
-        }
+    const handleUpload = async () => {
+        if (!bachelors) { setError("Please upload your Bachelor's degree."); return; }
+        setUploading(true); setError('');
 
-        setUploading(true);
-        setError(null);
+        const allFiles = [];
+        allFiles.push({ file: bachelors, type: 'bachelors_degree' });
+        if (masters) allFiles.push({ file: masters, type: 'masters_degree' });
+        certificates.forEach(f => allFiles.push({ file: f, type: 'certificate' }));
 
         try {
-            // Upload each file sequentially (or parallel)
-            // Only upload files that have been selected
-            const uploadPromises = requiredDocs
-                .filter(doc => files[doc.name])
-                .map(doc => {
-                    const formData = new FormData();
-                    formData.append('qualification_type', qualificationType);
-                    formData.append('document_type', doc.name);
-                    formData.append('file', files[doc.name]);
-
-                    return uploadDocument(formData);
-                });
-
-            await Promise.all(uploadPromises);
-            setSuccess(true);
-            setTimeout(() => {
-
-                navigate('/onboarding/face-verification');
-                alert("Documents uploaded successfully!");
-            }, 500);
-
+            for (let i = 0; i < allFiles.length; i++) {
+                setUploadProgress(`Uploading ${i + 1} of ${allFiles.length}...`);
+                const formData = new FormData();
+                formData.append('file', allFiles[i].file);
+                formData.append('document_type', allFiles[i].type);
+                formData.append('qualification_type', 'Education'); 
+                await uploadDocument(formData);
+            }
+            navigate('/onboarding/complete');
         } catch (err) {
-            console.error("Upload failed", err);
-            setError("Failed to upload documents. Please try again.");
+            setError('Upload failed. Please try again.');
+            console.error(err);
         } finally {
             setUploading(false);
+            setUploadProgress('');
         }
     };
 
+    const totalFiles = (bachelors ? 1 : 0) + (masters ? 1 : 0) + certificates.length;
+
+    // Styles
+    const uploadZone = (hasFile) => ({
+        border: hasFile ? '2px solid #059669' : '2px dashed #d1d5db',
+        borderRadius: 10, padding: hasFile ? '14px 18px' : '32px 20px',
+        display: 'flex', flexDirection: hasFile ? 'row' : 'column',
+        alignItems: 'center', justifyContent: hasFile ? 'space-between' : 'center',
+        cursor: 'pointer', background: hasFile ? '#f0fdf4' : '#fff',
+        gap: hasFile ? 8 : 0,
+    });
+
+    const fileTag = { display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flex: 1 };
+
     return (
-        <div className="min-h-screen w-full flex items-center justify-center p-6 py-12 bg-emerald-100">
-            <div className="w-full max-w-4xl p-10 md:p-16 bg-white/80 backdrop-blur-3xl border border-emerald-100/80 rounded-[3rem] shadow-[0_20px_60px_-15px_rgba(16,185,129,0.15)] relative z-10">
-
-                <h1 className="text-3xl md:text-5xl font-extrabold text-slate-900 mb-4 tracking-tight">
-                    Professional Documents
-                </h1>
-                <p className="text-slate-500 text-lg md:text-xl leading-relaxed max-w-2xl mb-12">
-                    Select your qualification and upload the required proof.
-                </p>
-
-                {error && (
-                    <div className="mb-6 p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl">
-                        {error}
+        <div style={{ minHeight: '100vh', background: '#f9fafb', fontFamily: "'Inter', system-ui, sans-serif" }}>
+            <header style={{ background: '#fff', borderBottom: '1px solid #e5e7eb', position: 'sticky', top: 0, zIndex: 30 }}>
+                <div style={{ maxWidth: 700, margin: '0 auto', padding: '0 32px', height: 56, display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <div style={{ width: 32, height: 32, background: '#059669', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <span style={{ color: '#fff', fontWeight: 700, fontSize: 13 }}>T</span>
                     </div>
-                )}
+                    <span style={{ fontWeight: 600, color: '#111827', fontSize: 15 }}>Taxplan Advisor</span>
+                </div>
+            </header>
 
-                {success && (
-                    <div className="mb-6 p-4 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl">
-                        Documents uploaded successfully!
-                    </div>
-                )}
-
-                {/* Qualification Selector */}
-                <div className="mb-8">
-                    <label className="block text-slate-700 font-bold mb-3 text-lg">Qualification Type</label>
-                    <select
-                        value={qualificationType}
-                        onChange={handleQualificationChange}
-                        className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 text-lg focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all cursor-pointer"
-                    >
-                        <option value="">-- Select Your Qualification --</option>
-                        {Object.keys(QUALIFICATION_REQUIREMENTS).map(type => (
-                            <option key={type} value={type}>{type}</option>
-                        ))}
-                    </select>
+            <div style={{ maxWidth: 700, margin: '0 auto', padding: '32px 32px 60px' }}>
+                <div style={{ marginBottom: 28 }}>
+                    <span style={{ display: 'inline-block', fontSize: 12, fontWeight: 600, color: '#059669', background: '#ecfdf5', padding: '4px 12px', borderRadius: 20, marginBottom: 12 }}>Step 5 of 5</span>
+                    <h1 style={{ fontSize: 24, fontWeight: 700, color: '#111827', margin: 0 }}>Upload Qualifications</h1>
+                    <p style={{ fontSize: 14, color: '#6b7280', marginTop: 4 }}>Upload your degree certificates and any additional qualifications.</p>
                 </div>
 
-                {/* Dynamic File Inputs */}
-                {qualificationType && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12 animate-[fadeIn_0.5s_ease-out_forwards]">
-                        {QUALIFICATION_REQUIREMENTS[qualificationType].map(doc => (
-                            <div key={doc.name} className="group relative p-6 h-48 rounded-3xl bg-white border-2 border-dashed border-emerald-200 hover:border-emerald-500 transition-all flex flex-col justify-between shadow-sm hover:shadow-lg">
-                                <div>
-                                    <h3 className="text-lg font-bold text-slate-900 mb-1">
-                                        {doc.name}
-                                        {!doc.required && <span className="ml-2 text-sm text-slate-400 font-normal">(Optional)</span>}
-                                    </h3>
-                                    <p className="text-slate-400 text-sm">PDF, JPG or PNG</p>
+                {/* 1. Bachelor's Degree (Required) */}
+                <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e5e7eb', padding: 24, marginBottom: 16 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <span style={{ fontSize: 20 }}>🎓</span>
+                            <h2 style={{ fontSize: 15, fontWeight: 600, color: '#111827', margin: 0 }}>Bachelor's Degree</h2>
+                        </div>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: '#dc2626', background: '#fef2f2', padding: '3px 10px', borderRadius: 12 }}>Required</span>
+                    </div>
+                    <div onClick={() => bachelorRef.current?.click()} style={uploadZone(!!bachelors)}>
+                        {bachelors ? (
+                            <>
+                                <div style={fileTag}>
+                                    <span>📎</span>
+                                    <span style={{ fontSize: 14, fontWeight: 500, color: '#047857', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{bachelors.name}</span>
+                                    <span style={{ fontSize: 12, color: '#6b7280', flexShrink: 0 }}>({(bachelors.size / 1024).toFixed(0)} KB)</span>
                                 </div>
-
-                                <label className="cursor-pointer w-full">
-                                    <div className={`py-3 px-6 rounded-xl border transition-all text-center font-bold ${files[doc.name]
-                                        ? 'bg-emerald-100 border-emerald-200 text-emerald-800'
-                                        : 'bg-slate-50 border-slate-200 text-slate-500 group-hover:bg-emerald-50 group-hover:text-emerald-700'
-                                        }`}>
-                                        {files[doc.name] ? (
-                                            <span className="truncate block">{files[doc.name].name}</span>
-                                        ) : 'Choose File'}
-                                    </div>
-                                    <input
-                                        type="file"
-                                        className="hidden"
-                                        accept=".pdf,.jpg,.jpeg,.png"
-                                        onChange={(e) => handleFileChange(doc.name, e.target.files[0])}
-                                    />
-                                </label>
-                            </div>
-                        ))}
+                                <button onClick={(e) => { e.stopPropagation(); setBachelors(null); }} style={{ color: '#ef4444', fontSize: 14, fontWeight: 700, background: 'none', border: 'none', cursor: 'pointer' }}>✕</button>
+                            </>
+                        ) : (
+                            <>
+                                <span style={{ fontSize: 28, marginBottom: 6 }}>📂</span>
+                                <p style={{ fontWeight: 500, color: '#374151', margin: '0 0 2px', fontSize: 14 }}>Click to upload bachelor's degree</p>
+                                <p style={{ fontSize: 12, color: '#9ca3af', margin: 0 }}>PDF, JPG, PNG • Max 10MB</p>
+                            </>
+                        )}
                     </div>
-                )}
-
-                {/* Actions */}
-                <div className="flex flex-col md:flex-row gap-6 justify-between items-center border-t border-emerald-200/60 pt-10">
-                    <button
-                        onClick={handleLogout}
-                        className="px-10 py-4 rounded-2xl border-2 border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-900 transition-all text-lg font-bold"
-                    >
-                        Sign Out
-                    </button>
-
-                    <button
-                        onClick={handleSubmit}
-                        disabled={!qualificationType || uploading || success}
-                        className="w-full md:w-auto px-16 py-4 rounded-2xl bg-gradient-to-r from-emerald-600 to-slate-900 text-white hover:from-emerald-500 hover:to-slate-800 shadow-[0_15px_40px_rgba(16,185,129,0.3)] hover:-translate-y-1 active:translate-y-0 transition-all text-xl font-extrabold flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0"
-                    >
-                        {uploading ? 'Uploading...' : 'Submit Documents'}
-                    </button>
+                    <input ref={bachelorRef} type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={handleBachelors} style={{ display: 'none' }} />
                 </div>
 
+                {/* 2. Master's Degree (Optional) */}
+                <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e5e7eb', padding: 24, marginBottom: 16 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <span style={{ fontSize: 20 }}>📜</span>
+                            <h2 style={{ fontSize: 15, fontWeight: 600, color: '#111827', margin: 0 }}>Master's Degree</h2>
+                        </div>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', background: '#f3f4f6', padding: '3px 10px', borderRadius: 12 }}>Optional</span>
+                    </div>
+                    <div onClick={() => masterRef.current?.click()} style={uploadZone(!!masters)}>
+                        {masters ? (
+                            <>
+                                <div style={fileTag}>
+                                    <span>📎</span>
+                                    <span style={{ fontSize: 14, fontWeight: 500, color: '#047857', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{masters.name}</span>
+                                    <span style={{ fontSize: 12, color: '#6b7280', flexShrink: 0 }}>({(masters.size / 1024).toFixed(0)} KB)</span>
+                                </div>
+                                <button onClick={(e) => { e.stopPropagation(); setMasters(null); }} style={{ color: '#ef4444', fontSize: 14, fontWeight: 700, background: 'none', border: 'none', cursor: 'pointer' }}>✕</button>
+                            </>
+                        ) : (
+                            <>
+                                <span style={{ fontSize: 28, marginBottom: 6 }}>📂</span>
+                                <p style={{ fontWeight: 500, color: '#374151', margin: '0 0 2px', fontSize: 14 }}>Click to upload master's degree</p>
+                                <p style={{ fontSize: 12, color: '#9ca3af', margin: 0 }}>PDF, JPG, PNG • Max 10MB</p>
+                            </>
+                        )}
+                    </div>
+                    <input ref={masterRef} type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={handleMasters} style={{ display: 'none' }} />
+                </div>
+
+                {/* 3. Certificates (up to 5) */}
+                <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e5e7eb', padding: 24, marginBottom: 24 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <span style={{ fontSize: 20 }}>📋</span>
+                            <h2 style={{ fontSize: 15, fontWeight: 600, color: '#111827', margin: 0 }}>Certificates</h2>
+                        </div>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', background: '#f3f4f6', padding: '3px 10px', borderRadius: 12 }}>
+                            {certificates.length}/5 • Optional
+                        </span>
+                    </div>
+
+                    {certificates.length < 5 && (
+                        <div onClick={() => certRef.current?.click()} style={{ ...uploadZone(false), padding: '24px 20px', marginBottom: certificates.length > 0 ? 12 : 0 }}>
+                            <span style={{ fontSize: 24, marginBottom: 4 }}>➕</span>
+                            <p style={{ fontWeight: 500, color: '#374151', margin: '0 0 2px', fontSize: 14 }}>Add certificate</p>
+                            <p style={{ fontSize: 12, color: '#9ca3af', margin: 0 }}>PDF, JPG, PNG • Max 10MB each</p>
+                        </div>
+                    )}
+                    <input ref={certRef} type="file" accept=".pdf,.jpg,.jpeg,.png" multiple onChange={handleCertificates} style={{ display: 'none' }} />
+
+                    {certificates.length > 0 && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: certificates.length < 5 ? 0 : 0 }}>
+                            {certificates.map((f, i) => (
+                                <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 8, padding: '10px 14px' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flex: 1 }}>
+                                        <span style={{ fontSize: 12, fontWeight: 700, color: '#6b7280', background: '#e5e7eb', width: 22, height: 22, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{i + 1}</span>
+                                        <span style={{ fontSize: 14, color: '#374151', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.name}</span>
+                                        <span style={{ fontSize: 12, color: '#9ca3af', flexShrink: 0 }}>({(f.size / 1024).toFixed(0)} KB)</span>
+                                    </div>
+                                    <button onClick={() => removeCert(i)} style={{ color: '#ef4444', fontSize: 14, fontWeight: 700, background: 'none', border: 'none', cursor: 'pointer', marginLeft: 8 }}>✕</button>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+
+                {error && <div style={{ marginBottom: 16, background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, padding: '12px 16px', fontSize: 14, color: '#dc2626' }}>{error}</div>}
+
+                <button onClick={handleUpload} disabled={uploading || !bachelors}
+                    style={{
+                        width: '100%', padding: '14px 0', borderRadius: 10, fontWeight: 600, fontSize: 14, border: 'none',
+                        background: (uploading || !bachelors) ? '#e5e7eb' : '#059669',
+                        color: (uploading || !bachelors) ? '#9ca3af' : '#fff',
+                        cursor: (uploading || !bachelors) ? 'not-allowed' : 'pointer',
+                    }}>
+                    {uploading ? uploadProgress : `Upload ${totalFiles} Document${totalFiles !== 1 ? 's' : ''} & Complete →`}
+                </button>
             </div>
         </div>
     );
