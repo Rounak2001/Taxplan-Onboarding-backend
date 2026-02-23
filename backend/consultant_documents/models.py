@@ -6,6 +6,8 @@ class ConsultantDocument(models.Model):
     qualification_type = models.CharField(max_length=100)
     document_type = models.CharField(max_length=100)
     file_path = models.CharField(max_length=500)
+    verification_status = models.CharField(max_length=50, blank=True, null=True)
+    gemini_raw_response = models.TextField(blank=True, null=True)
     uploaded_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):

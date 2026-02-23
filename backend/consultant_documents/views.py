@@ -20,34 +20,44 @@ class UploadDocumentView(APIView):
         if not all([qualification_type, document_type, file_obj]):
             return Response({'error': 'Missing required fields'}, status=400)
 
-        # Initialize Supabase Client
-        from utils.supabase_client import get_supabase_client
-        supabase = get_supabase_client()
-
-        # Create unique file path: user_id/timestamp_filename
+        
         timestamp = int(time.time())
-        file_path = f"{user.id}/{timestamp}_{file_obj.name}"
-        bucket_name = "consultant_documents"
+      
+        filename = "".join(x for x in file_obj.name if x.isalnum() or x in "._- ")
+        file_path = f"consultant_documents/{user.id}/{timestamp}_{filename}"
 
         try:
-            # Upload file to Supabase
-            file_content = file_obj.read()
-            res = supabase.storage.from_(bucket_name).upload(
-                file=file_content,
-                path=file_path,
-                file_options={"content-type": file_obj.content_type}
-            )
-
-            # Save to Database with empty public_url since we use signed URLs now
+            # Save to S3 via default storage
+            from django.core.files.storage import default_storage
+            
+            # Save file to S3
+            saved_path = default_storage.save(file_path, file_obj)
+            
             document = ConsultantDocument.objects.create(
                 user=user,
                 qualification_type=qualification_type,
                 document_type=document_type,
-                file_path=file_path
+                file_path=saved_path
             )
+          
+            
+            # Verify with Gemini
+            from ai_analysis.services import QualificationDocumentVerifier
+            verifier = QualificationDocumentVerifier()
+            result = verifier.verify_document(document)
+            
+            document.verification_status = result.get('verification_status')
+            document.gemini_raw_response = result.get('raw_response')
+            document.save()
 
             serializer = ConsultantDocumentSerializer(document)
-            return Response(serializer.data, status=201)
+            
+            # Add Gemini verification results to response payload manually because 
+            # the serializer might not include the new fields immediately unless updated.
+            response_data = serializer.data
+            response_data['verification_status'] = document.verification_status
+            
+            return Response(response_data, status=201)
 
         except Exception as e:
             return Response({'error': str(e)}, status=500)
