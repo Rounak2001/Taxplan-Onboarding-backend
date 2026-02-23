@@ -52,15 +52,12 @@ export const uploadDocument = async (formData) => {
 
 // Get consultant documents
 export const getDocuments = async () => {
-    const response = await api.get('/documents/list/');
+    const response = await api.get('/auth/documents/list/');
     return response.data;
 };
 
-// Save expertise
-export const saveExpertise = async (data) => {
-    const response = await api.post('/auth/expertise/', data);
-    return response.data;
-};
+
+
 
 // Face Verification - Upload ID Photo
 export const uploadFaceVerificationPhoto = async (userId, formData) => {
@@ -75,6 +72,62 @@ export const uploadFaceVerificationPhoto = async (userId, formData) => {
 // Face Verification - Verify Face
 export const verifyFace = async (userId, data) => {
     const response = await api.post(`/face-verification/users/${userId}/verify-face/`, data);
+    return response.data;
+};
+
+
+// Identity Verification - Upload Document
+export const uploadIdentityDocument = async (formData) => {
+    const response = await api.post('/auth/identity/upload-doc/', formData, {
+        headers: {
+            'Content-Type': 'multipart/form-data',
+        },
+    });
+    return response.data;
+};
+
+// Assessment API
+export const getTestTypes = async () => {
+    const response = await api.get('/assessment/test-types/');
+    return response.data;
+};
+
+export const createSession = async (data) => {
+    const response = await api.post('/assessment/sessions/', data);
+    return response.data;
+};
+
+export const submitTest = async (sessionId, data) => {
+    const response = await api.post(`/assessment/sessions/${sessionId}/submit_test/`, data);
+    return response.data;
+};
+
+export const submitVideo = async (sessionId, formData) => {
+    // formData should contain 'video' and 'question_id'
+    const response = await api.post(`/assessment/sessions/${sessionId}/submit_video/`, formData, {
+        headers: {
+            'Content-Type': 'multipart/form-data',
+        },
+    });
+    return response.data;
+};
+
+export const logViolation = async (sessionId, data) => {
+    const response = await api.post(`/assessment/sessions/${sessionId}/log_violation/`, data);
+    return response.data;
+};
+
+export const getLatestResult = async () => {
+    const response = await api.get('/assessment/sessions/latest_result/');
+    return response.data;
+};
+
+export const processProctoringSnapshot = async (sessionId, formData) => {
+    const response = await api.post(`/assessment/sessions/${sessionId}/process_proctoring_snapshot/`, formData, {
+        headers: {
+            'Content-Type': 'multipart/form-data',
+        },
+    });
     return response.data;
 };
 
