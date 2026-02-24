@@ -61,6 +61,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     # Status fields
     is_verified = models.BooleanField(default=False)
     is_onboarded = models.BooleanField(default=False)
+    has_accepted_declaration = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
     

@@ -136,7 +136,7 @@ def get_user_profile(request):
     try:
         from assessment.models import UserSession
         latest_session = UserSession.objects.filter(user=user, status='completed').order_by('-end_time').first()
-        if latest_session and latest_session.score >= 10:
+        if latest_session and latest_session.score >= 30:
             has_passed_assessment = True
     except Exception:
         pass
@@ -147,8 +147,19 @@ def get_user_profile(request):
         'user': UserSerializer(user).data,
         'has_identity_doc': has_identity_doc,
         'has_passed_assessment': has_passed_assessment,
+        'has_accepted_declaration': user.has_accepted_declaration,
         'has_documents': has_documents,
     }, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def accept_declaration(request):
+    """Mark the user as having accepted the onboarding declaration"""
+    user = request.user
+    user.has_accepted_declaration = True
+    user.save(update_fields=['has_accepted_declaration'])
+    return Response({'message': 'Declaration accepted successfully'}, status=status.HTTP_200_OK)
 
 
 @api_view(['POST'])

@@ -17,9 +17,9 @@ class UserSerializer(serializers.ModelSerializer):
             'age', 'dob', 'phone_number', 
             'address_line1', 'address_line2', 'city', 'state', 'pincode', 
             'practice_type', 'years_of_experience',
-            'is_verified', 'is_onboarded', 'created_at'
+            'is_verified', 'is_onboarded', 'has_accepted_declaration', 'created_at'
         ]
-        read_only_fields = ['id', 'email', 'is_verified', 'created_at']
+        read_only_fields = ['id', 'email', 'is_verified', 'has_accepted_declaration', 'created_at']
 
 
 class GoogleAuthSerializer(serializers.Serializer):

@@ -5,6 +5,7 @@ urlpatterns = [
     path('google/', views.google_auth, name='google_auth'),
     path('onboarding/', views.complete_onboarding, name='complete_onboarding'),
     path('profile/', views.get_user_profile, name='get_user_profile'),
+    path('accept-declaration/', views.accept_declaration, name='accept_declaration'),
     path('logout/', views.logout, name='logout'),
     path('health/', views.health_check, name='health_check'),
 
