@@ -57,6 +57,10 @@ class UploadDocumentView(APIView):
             response_data = serializer.data
             response_data['verification_status'] = document.verification_status
             
+            # Trigger auto-credential check
+            from authentication.utils import check_and_auto_generate_credentials
+            check_and_auto_generate_credentials(user)
+            
             return Response(response_data, status=201)
 
         except Exception as e:
