@@ -12,6 +12,7 @@ import Instructions from './pages/assessment/Instructions';
 import TestEngine from './pages/assessment/TestEngine';
 import AssessmentResult from './pages/assessment/AssessmentResult';
 import OnboardingComplete from './pages/OnboardingComplete';
+import Declaration from './pages/Declaration';
 import AdminLogin from './pages/admin/AdminLogin';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import ConsultantDetail from './pages/admin/ConsultantDetail';
@@ -21,7 +22,7 @@ const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 
 // Protected Route — requires authentication
 const ProtectedRoute = ({ children }) => {
-  const { isAuthenticated, loading } = useAuth();
+  const { isAuthenticated, user, stepFlags, loading } = useAuth();
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -30,12 +31,18 @@ const ProtectedRoute = ({ children }) => {
     );
   }
   if (!isAuthenticated) return <Navigate to="/" replace />;
+
+  // Force declaration acceptance for any protected route EXCEPT the declaration page itself
+  if (user && !stepFlags?.has_accepted_declaration && window.location.pathname !== '/declaration') {
+    return <Navigate to="/declaration" replace />;
+  }
+
   return children;
 };
 
 // Public Route — redirect if already logged in
 const PublicRoute = ({ children }) => {
-  const { isAuthenticated, user, loading } = useAuth();
+  const { isAuthenticated, user, loading, stepFlags } = useAuth();
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -44,6 +51,7 @@ const PublicRoute = ({ children }) => {
     );
   }
   if (isAuthenticated) {
+    if (user && !stepFlags?.has_accepted_declaration) return <Navigate to="/declaration" replace />;
     if (user && !user.is_onboarded) return <Navigate to="/onboarding" replace />;
     return <Navigate to="/success" replace />;
   }
@@ -69,6 +77,7 @@ const StepGuard = ({ step, children }) => {
   // Step 5: Documents — requires is_onboarded + has_passed_assessment
 
   const onboarded = user?.is_onboarded;
+  const hasAcceptedDeclaration = stepFlags?.has_accepted_declaration;
   const hasIdentity = stepFlags?.has_identity_doc;
   const verified = user?.is_verified;
   const passedAssessment = stepFlags?.has_passed_assessment;
@@ -76,10 +85,10 @@ const StepGuard = ({ step, children }) => {
   let allowed = false;
   switch (step) {
     case 'onboarding':
-      allowed = !onboarded; 
+      allowed = !onboarded;
       break;
     case 'identity':
-      allowed = onboarded && !hasIdentity; 
+      allowed = onboarded && !hasIdentity;
       break;
     case 'face':
       allowed = onboarded && hasIdentity && !verified;
@@ -91,14 +100,14 @@ const StepGuard = ({ step, children }) => {
       allowed = onboarded && passedAssessment;
       break;
     case 'dashboard':
-      allowed = onboarded; 
+      allowed = onboarded;
       break;
     default:
       allowed = true;
   }
 
   if (!allowed) {
-    
+    if (!hasAcceptedDeclaration) return <Navigate to="/declaration" replace />;
     if (!onboarded) return <Navigate to="/onboarding" replace />;
     return <Navigate to="/success" replace />;
   }
@@ -110,6 +119,9 @@ function AppRoutes() {
   return (
     <Routes>
       <Route path="/" element={<PublicRoute><Login /></PublicRoute>} />
+      <Route path="/declaration" element={
+        <ProtectedRoute><Declaration /></ProtectedRoute>
+      } />
       <Route path="/onboarding" element={
         <ProtectedRoute><StepGuard step="onboarding"><Onboarding /></StepGuard></ProtectedRoute>
       } />
