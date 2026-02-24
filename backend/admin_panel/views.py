@@ -111,6 +111,7 @@ def consultant_list(request):
             'phone_number': u.phone_number,
             'is_onboarded': u.is_onboarded,
             'is_verified': u.is_verified,
+            'has_accepted_declaration': u.has_accepted_declaration,
             'assessment_status': assessment_status,
             'assessment_score': assessment_score,
             'video_score': video_score,
@@ -167,6 +168,7 @@ def consultant_detail(request, user_id):
         'is_onboarded': u.is_onboarded,
         'is_verified': u.is_verified,
         'is_active': u.is_active,
+        'has_accepted_declaration': u.has_accepted_declaration,
         'created_at': u.created_at.isoformat() if u.created_at else None,
         'updated_at': u.updated_at.isoformat() if u.updated_at else None,
         'has_credentials': hasattr(u, 'credentials'),
@@ -300,6 +302,8 @@ def consultant_detail(request, user_id):
     })
 
 
+from authentication.utils import generate_and_send_credentials
+
 @api_view(['POST'])
 @authentication_classes([AdminJWTAuthentication])
 @permission_classes([AllowAny])
@@ -310,57 +314,11 @@ def generate_credentials(request, user_id):
     except User.DoesNotExist:
         return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
 
-
-    if hasattr(u, 'credentials'):
-        return Response({'error': 'Credentials already generated for this user'}, status=status.HTTP_400_BAD_REQUEST)
-
-    try:
-        first_name_clean = ''.join(filter(str.isalnum, u.first_name.lower())) if u.first_name else 'consultant'
-        if not first_name_clean:
-             first_name_clean = 'user'
-             
-        attempts = 0
-        username = ''
-        while attempts < 10:
-            random_digits = ''.join(random.choices(string.digits, k=4))
-            candidate = f"taxplanadvisor_{first_name_clean}_{random_digits}"
-            if not ConsultantCredential.objects.filter(username=candidate).exists():
-                username = candidate
-                break
-            attempts += 1
-        
-        if not username:
-             return Response({'error': 'Failed to generate unique username'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-        chars = string.ascii_letters + string.digits + "!@#$%^&*"
-        password = ''.join(random.choices(chars, k=10))
-
-        ConsultantCredential.objects.create(
-            user=u,
-            username=username,
-            password=password
-        )
-
-        u.set_password(password)
-        u.save()
-
-        subject = "Your TaxPlan Advisor Consultant Credentials"
-        message = f"Hello {u.get_full_name()},\n\nCongratulations! Your verification is complete.\nHere are your login credentials for the consultant portal:\n\nUsername: {username}\nPassword: {password}\n\nPlease keep these credentials safe and do not share them.\n\nBest regards,\nTaxPlan Advisor Team"
-        
-        send_mail(
-            subject,
-            message,
-            settings.DEFAULT_FROM_EMAIL or 'admin@taxplanadvisor.com',
-            [u.email],
-            fail_silently=True,
-        )
-
-        return Response({
-            'message': 'Credentials generated and sent successfully',
-            'username': username,
-            'password': password
-        }, status=status.HTTP_201_CREATED)
-
-    except Exception as e:
-        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    success, result = generate_and_send_credentials(u)
+    
+    if success:
+        return Response(result, status=status.HTTP_201_CREATED)
+    else:
+        status_code = status.HTTP_400_BAD_REQUEST if "already generated" in str(result) else status.HTTP_500_INTERNAL_SERVER_ERROR
+        return Response({'error': result}, status=status_code)
 
