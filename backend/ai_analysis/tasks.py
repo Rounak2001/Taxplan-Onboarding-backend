@@ -36,6 +36,31 @@ def evaluate_video_task(video_response_id, question_text):
         video_response.save()
         logger.info(f"Successfully evaluated VideoResponse ID {video_response_id}")
         
+        # Check if this was the last video response to be evaluated for the session
+        session = video_response.session
+        all_videos = VideoResponse.objects.filter(session=session)
+        if all(vr.ai_status == 'completed' for vr in all_videos):
+            logger.info(f"All videos evaluated for session {session.id}. Checking auto-credential condition.")
+            video_score = sum([vr.ai_score for vr in all_videos if vr.ai_score is not None])
+            mcq_score = session.score or 0
+            
+            logger.info(f"Session {session.id} final scores - MCQ: {mcq_score}, Video: {video_score}")
+            if mcq_score >= 30 and video_score >= 15:
+                user = session.user
+                logger.info(f"Threshold met (MCQ: {mcq_score}, Video: {video_score}). Checking auto-credential condition.")
+                
+                try:
+                    from authentication.utils import check_and_auto_generate_credentials
+                    success, msg = check_and_auto_generate_credentials(user)
+                    if success:
+                        logger.info(f"Auto-credentials process succeeded for user {user.id}.")
+                    else:
+                        logger.info(f"Auto-credentials process returned false for user {user.id}: {msg}")
+                except Exception as eval_err:
+                    logger.error(f"Error checking auto-credentials for user {user.id}: {eval_err}")
+            else:
+                logger.info(f"Threshold not met (MCQ: {mcq_score}, Video: {video_score}). Credentials will await manual generation.")
+                
     except Exception as e:
         logger.error(f"Failed to evaluate VideoResponse ID {video_response_id}: {e}")
         video_response.ai_status = 'failed'
