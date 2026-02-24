@@ -93,20 +93,26 @@ export default function VideoQuestion({ question, onVideoUploaded, sessionId, qu
     const handleUpload = async (blob) => {
         const uploadBlob = blob || recordedBlob;
         if (!uploadBlob) return;
+
         setUploading(true);
         setError('');
+
         try {
             const formData = new FormData();
             formData.append('video', uploadBlob, `video_${question.id}.webm`);
             formData.append('question_id', question.id);
-            const { submitVideo } = await import('../../services/api');
-            await submitVideo(sessionId, formData);
+
+            const apiModule = await import('../../services/api');
+            await apiModule.submitVideo(sessionId, formData);
+
             setUploaded(true);
             setTimeout(() => onVideoUploaded && onVideoUploaded(), 800);
         } catch (err) {
             setError('Upload failed. Please try again.');
-            console.error(err);
-        } finally { setUploading(false); }
+            console.error('Video upload error:', err);
+        } finally {
+            setUploading(false);
+        }
     };
 
     const formatTime = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;

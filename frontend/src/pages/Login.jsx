@@ -6,13 +6,13 @@ import { useAuth } from '../context/AuthContext';
 
 const Login = () => {
     const navigate = useNavigate();
-    const { login } = useAuth();
+    const { checkAuth } = useAuth();
     const [error, setError] = useState('');
 
     const handleGoogleSuccess = async (credentialResponse) => {
         try {
             const data = await googleAuth(credentialResponse.credential);
-            login(data.user);
+            await checkAuth(); // Sync the stepFlags after setting the session cookie
             if (data.needs_onboarding) {
                 navigate('/onboarding');
             } else {

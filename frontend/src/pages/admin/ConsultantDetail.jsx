@@ -235,9 +235,15 @@ const ConsultantDetail = () => {
                                     {fieldRow('Experience', p.years_of_experience ? `${p.years_of_experience} years` : null)}
                                 </div>
                             </div>
-                            <div style={{ marginTop: 12, display: 'flex', gap: 16 }}>
+                            <div style={{ marginTop: 12, display: 'flex', gap: 16, alignItems: 'center' }}>
                                 {fieldRow('Joined', p.created_at ? new Date(p.created_at).toLocaleString() : null)}
                                 {fieldRow('Updated', p.updated_at ? new Date(p.updated_at).toLocaleString() : null)}
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 8px', borderRadius: 6, background: p.has_accepted_declaration ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)', border: `1px solid ${p.has_accepted_declaration ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)'}` }}>
+                                    <span style={{ fontSize: 13, color: '#94a3b8' }}>Declaration:</span>
+                                    <span style={{ fontSize: 13, fontWeight: 600, color: p.has_accepted_declaration ? '#34d399' : '#f87171' }}>
+                                        {p.has_accepted_declaration ? '✅ Accepted' : '❌ Pending'}
+                                    </span>
+                                </div>
                             </div>
                         </div>
                     )}
@@ -549,7 +555,11 @@ const ConsultantDetail = () => {
                                                                     </span>
                                                                     {response && (
                                                                         <button
-                                                                            onClick={() => setSelectedVideoCard({ ...response, question: q.text || q.question })}
+                                                                            onClick={() => {
+                                                                                // Pause all videos on the page before opening the modal
+                                                                                document.querySelectorAll('video').forEach(vid => vid.pause());
+                                                                                setSelectedVideoCard({ ...response, question: q.text || q.question });
+                                                                            }}
                                                                             style={{
                                                                                 background: 'none', border: 'none', color: '#60a5fa', cursor: 'pointer', padding: 0,
                                                                                 fontSize: 14, display: 'flex', alignItems: 'center'
@@ -924,11 +934,12 @@ const ConsultantDetail = () => {
                                 {/* Video Player */}
                                 <div style={{ marginBottom: 24, borderRadius: 12, overflow: 'hidden', background: '#000', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}>
                                     <video
-                                        src={selectedVideoCard.video_url}
                                         controls
-                                        autoPlay
                                         style={{ width: '100%', maxHeight: 400, display: 'block' }}
-                                    />
+                                    >
+                                        <source src={selectedVideoCard.video_url} type="video/webm" />
+                                        Your browser does not support the video tag.
+                                    </video>
                                 </div>
 
                                 {/* Results Grid */}

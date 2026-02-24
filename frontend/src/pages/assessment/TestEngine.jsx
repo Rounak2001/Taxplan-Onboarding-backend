@@ -244,9 +244,9 @@ const TestEngine = () => {
                     <div style={{ fontSize: 56, marginBottom: 16 }}>🚫</div>
                     <h1 style={{ fontSize: 24, fontWeight: 700, color: '#dc2626', margin: '0 0 12px' }}>Assessment Terminated</h1>
                     <p style={{ fontSize: 14, color: '#6b7280', lineHeight: 1.6, marginBottom: 24 }}>
-                        You exceeded the maximum proctoring violations. Your assessment has been automatically submitted.
+                        You exceeded the maximum proctoring violations. Your assessment has been automatically concluded, and your current progress has been submitted.
                     </p>
-                    <button onClick={() => navigate('/')} style={s.btnPrimary}>Return to Dashboard</button>
+                    <button onClick={handleSubmitTest} style={s.btnPrimary}>View Assessment Result</button>
                 </div>
             </div>
         );
