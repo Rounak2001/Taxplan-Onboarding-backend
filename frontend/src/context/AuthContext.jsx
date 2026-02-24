@@ -29,6 +29,7 @@ export const AuthProvider = ({ children }) => {
                 has_identity_doc: data.has_identity_doc || false,
                 has_passed_assessment: data.has_passed_assessment || false,
                 has_documents: data.has_documents || false,
+                has_accepted_declaration: data.has_accepted_declaration || false,
             });
             setIsAuthenticated(true);
         } catch (error) {
