@@ -22,6 +22,12 @@ export const completeOnboarding = async (data) => {
     return response.data;
 };
 
+// Accept declaration
+export const acceptDeclaration = async () => {
+    const response = await api.post('/auth/accept-declaration/');
+    return response.data;
+};
+
 // Get user profile
 export const getUserProfile = async () => {
     const response = await api.get('/auth/profile/');
