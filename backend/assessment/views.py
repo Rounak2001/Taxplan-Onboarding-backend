@@ -107,7 +107,7 @@ class UserSessionViewSet(viewsets.ModelViewSet):
         for s in past_sessions:
             # Check if session was a failure
             # completed with low score OR flagged (disqualified)
-            if s.status == 'flagged' or (s.status == 'completed' and s.score < 10):
+            if s.status == 'flagged' or (s.status == 'completed' and s.score < 30):
                 failed_attempts += 1
         
         if failed_attempts >= 2:
@@ -288,7 +288,7 @@ class UserSessionViewSet(viewsets.ModelViewSet):
         past_sessions = UserSession.objects.filter(user=request.user).exclude(status='ongoing')
         failed_attempts = 0
         for s in past_sessions:
-            if s.status == 'flagged' or (s.status == 'completed' and s.score < 10):
+            if s.status == 'flagged' or (s.status == 'completed' and s.score < 30):
                 failed_attempts += 1
         
         is_disqualified = failed_attempts >= 2
@@ -305,7 +305,7 @@ class UserSessionViewSet(viewsets.ModelViewSet):
             # Calculate video score
             video_responses = VideoResponse.objects.filter(session=session)
             video_score = sum([vr.ai_score for vr in video_responses if vr.ai_score])
-            video_total_possible = len(session.video_question_set) * 5 # Each score is out of 5
+            video_total_possible = len(session.video_question_set) * 5 
             
             # Check if all video tasks have been processed
             expected_videos = len(session.video_question_set)
@@ -315,7 +315,7 @@ class UserSessionViewSet(viewsets.ModelViewSet):
             response_data.update({
                 'score': session.score,
                 'total': len(session.question_set),
-                'passed': session.score >= 10 and session.status != 'flagged',
+                'passed': session.score >= 30 and session.status != 'flagged',
                 'status': session.status,
                 'session_id': session.id,
                 'video_score': video_score,
@@ -336,7 +336,7 @@ class UserSessionViewSet(viewsets.ModelViewSet):
             session.violation_count += 1
             
             # For tab switch violations
-            if session.violation_count >= 10: # Increased generic limit so it won't trigger prematurely
+            if session.violation_count >= 10: 
                 session.status = 'flagged'
                 session.end_time = timezone.now()
                 session.save()
