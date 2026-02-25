@@ -49,6 +49,26 @@ const AdminDashboard = () => {
         </span>
     );
 
+    const verificationBadge = (status) => {
+        const colors = {
+            'Matched': { bg: 'rgba(16,185,129,0.15)', color: '#34d399', border: 'rgba(16,185,129,0.25)' },
+            'All Verified': { bg: 'rgba(16,185,129,0.15)', color: '#34d399', border: 'rgba(16,185,129,0.25)' },
+            'No Match': { bg: 'rgba(239,68,68,0.12)', color: '#f87171', border: 'rgba(239,68,68,0.2)' },
+            'Pending': { bg: 'rgba(245,158,11,0.12)', color: '#fbbf24', border: 'rgba(245,158,11,0.2)' },
+            'Not Done': { bg: 'rgba(100,116,139,0.12)', color: '#64748b', border: 'rgba(100,116,139,0.15)' },
+            'No Docs': { bg: 'rgba(100,116,139,0.12)', color: '#64748b', border: 'rgba(100,116,139,0.15)' },
+        };
+        const c = colors[status] || colors['Pending'];
+        return (
+            <span style={{
+                padding: '4px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600,
+                background: c.bg, color: c.color, border: `1px solid ${c.border}`,
+            }}>
+                {status}
+            </span>
+        );
+    };
+
     return (
         <div style={{
             minHeight: '100vh',
@@ -135,7 +155,7 @@ const AdminDashboard = () => {
                         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                             <thead>
                                 <tr style={{ borderBottom: '1px solid rgba(148,163,184,0.1)' }}>
-                                    {['Name', 'Email', 'Phone', 'Assessment', 'Score', 'Video', 'Docs', 'Credentials', 'Joined'].map(h => (
+                                    {['Name', 'Email', 'Phone', 'Assessment', 'Score', 'Video', 'Docs', 'ID Verify', 'Doc Verify', 'Credentials', 'Joined'].map(h => (
                                         <th key={h} style={{
                                             padding: '14px 16px', textAlign: 'left', fontSize: 11,
                                             fontWeight: 700, color: '#64748b', textTransform: 'uppercase',
@@ -186,6 +206,12 @@ const AdminDashboard = () => {
                                             {c.document_count}
                                         </td>
                                         <td style={{ padding: '14px 16px' }}>
+                                            {verificationBadge(c.face_verification_status)}
+                                        </td>
+                                        <td style={{ padding: '14px 16px' }}>
+                                            {verificationBadge(c.doc_verification_status)}
+                                        </td>
+                                        <td style={{ padding: '14px 16px' }}>
                                             <span style={{
                                                 padding: '4px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600,
                                                 background: c.has_credentials ? 'rgba(16,185,129,0.15)' : 'rgba(100,116,139,0.12)',
@@ -202,7 +228,7 @@ const AdminDashboard = () => {
                                 ))}
                                 {filtered.length === 0 && (
                                     <tr>
-                                        <td colSpan={9} style={{ padding: 40, textAlign: 'center', color: '#64748b', fontSize: 14 }}>
+                                        <td colSpan={11} style={{ padding: 40, textAlign: 'center', color: '#64748b', fontSize: 14 }}>
                                             {search ? 'No consultants match your search.' : 'No consultants found.'}
                                         </td>
                                     </tr>
