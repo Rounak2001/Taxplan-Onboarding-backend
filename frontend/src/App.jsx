@@ -18,7 +18,7 @@ import AdminDashboard from './pages/admin/AdminDashboard';
 import ConsultantDetail from './pages/admin/ConsultantDetail';
 import './index.css';
 
-const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+const GOOGLE_CLIENT_ID = "1051464119459-a5apk0uflgqp3le9avo2qttmmrqcsg52.apps.googleusercontent.com";
 
 // Protected Route — requires authentication
 const ProtectedRoute = ({ children }) => {

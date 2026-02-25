@@ -21,12 +21,19 @@ const TestEngine = () => {
     const [tabWarnings, setTabWarnings] = useState(0);
     const [showWarningModal, setShowWarningModal] = useState(false);
     const [violationMessage, setViolationMessage] = useState('');
+    const [violationType, setViolationType] = useState('tab');
 
     const [currentVideoQuestionIndex, setCurrentVideoQuestionIndex] = useState(0);
     const [videoCompleted, setVideoCompleted] = useState(false);
     const [isFullScreen, setIsFullScreen] = useState(() => !!document.fullscreenElement);
     const [submissionResult, setSubmissionResult] = useState(null);
     const lastViolationTime = useRef(0);
+
+    // Refs to avoid stale closures in event listeners
+    const sessionRef = useRef(session);
+    const submissionResultRef = useRef(submissionResult);
+    useEffect(() => { sessionRef.current = session; }, [session]);
+    useEffect(() => { submissionResultRef.current = submissionResult; }, [submissionResult]);
 
     // Proctoring Refs
     const webcamRef = useRef(null);
@@ -118,18 +125,51 @@ const TestEngine = () => {
         if (snapshotIntervalRef.current) clearInterval(snapshotIntervalRef.current);
     };
 
-    // Client-side Proctoring (Tab switch, etc.)
+    // Client-side Proctoring (Tab switch, blur/focus, fullscreen, keyboard)
     useEffect(() => {
-        const onVisChange = () => { if (document.hidden) triggerViolation('Tab switch detected', 'tab'); };
+        // Fires when browser tab is switched (works cross-platform)
+        const onVisChange = () => {
+            if (document.hidden) triggerViolation('Tab switch detected', 'tab');
+        };
+
+        // Fires on Alt+Tab / workspace switch on Linux (visibilitychange may not fire)
+        const onBlur = () => {
+            // Only count as violation if we are in fullscreen (test is active)
+            if (document.fullscreenElement && !submissionResultRef.current) {
+                triggerViolation('Window lost focus', 'tab');
+            }
+        };
+
+        // Re-check fullscreen when user returns — catches WM-level fullscreen exit
+        const onFocus = () => {
+            if (!document.fullscreenElement && !submissionResultRef.current) {
+                triggerViolation('Fullscreen exited while away', 'tab');
+            }
+        };
+
+        // Safari fires pagehide/pageshow more reliably than visibilitychange
+        // (especially during Mission Control and Spaces transitions on macOS)
+        const onPageHide = () => {
+            triggerViolation('Page hidden (tab or app switch)', 'tab');
+        };
+
         const onFsChange = () => setIsFullScreen(!!document.fullscreenElement);
         const prevent = (e) => { e.preventDefault(); return false; };
         const onKey = (e) => {
             if (e.key === 'F12') { e.preventDefault(); return false; }
             if (e.ctrlKey && e.shiftKey && ['I', 'J', 'C'].includes(e.key)) { e.preventDefault(); return false; }
             if (e.ctrlKey && e.key === 'U') { e.preventDefault(); return false; }
+            // macOS: Cmd+Tab, Cmd+H, Cmd+M
+            if (e.metaKey && ['Tab', 'h', 'H', 'm', 'M'].includes(e.key)) { e.preventDefault(); return false; }
         };
+
         document.addEventListener('visibilitychange', onVisChange);
+        window.addEventListener('blur', onBlur);
+        window.addEventListener('focus', onFocus);
+        window.addEventListener('pagehide', onPageHide);
         document.addEventListener('fullscreenchange', onFsChange);
+        // Safari uses webkit prefix for fullscreen
+        document.addEventListener('webkitfullscreenchange', onFsChange);
         document.addEventListener('contextmenu', prevent);
         document.addEventListener('copy', prevent);
         document.addEventListener('paste', prevent);
@@ -137,7 +177,11 @@ const TestEngine = () => {
         document.addEventListener('keydown', onKey);
         return () => {
             document.removeEventListener('visibilitychange', onVisChange);
+            window.removeEventListener('blur', onBlur);
+            window.removeEventListener('focus', onFocus);
+            window.removeEventListener('pagehide', onPageHide);
             document.removeEventListener('fullscreenchange', onFsChange);
+            document.removeEventListener('webkitfullscreenchange', onFsChange);
             document.removeEventListener('contextmenu', prevent);
             document.removeEventListener('copy', prevent);
             document.removeEventListener('paste', prevent);
@@ -146,6 +190,36 @@ const TestEngine = () => {
             if (snapshotIntervalRef.current) clearInterval(snapshotIntervalRef.current);
         };
     }, []);
+
+    // Focus polling — catches macOS Mission Control, Spaces, and any missed blur events
+    // Runs every 2s and checks document.hasFocus(); more reliable than events alone
+    useEffect(() => {
+        if (loading || submissionResult) return;
+        const focusPoll = setInterval(() => {
+            const fsEl = document.fullscreenElement || document.webkitFullscreenElement;
+            if (!document.hasFocus() && fsEl && !submissionResultRef.current) {
+                triggerViolation('Focus lost (polling detected)', 'tab');
+            }
+        }, 2000);
+        return () => clearInterval(focusPoll);
+    }, [loading, submissionResult]);
+
+    // Heartbeat gap detection — catches Safari App Nap / JS execution pause
+    // If the gap between ticks exceeds 6s (expected 3s), JS was suspended
+    useEffect(() => {
+        if (loading || submissionResult) return;
+        let lastTick = Date.now();
+        const heartbeat = setInterval(() => {
+            const now = Date.now();
+            const gap = now - lastTick;
+            lastTick = now;
+            // If gap > 6s, JS was paused (App Nap, heavy throttling, etc.)
+            if (gap > 6000 && document.fullscreenElement && !submissionResultRef.current) {
+                triggerViolation('Browser execution paused (possible app switch)', 'tab');
+            }
+        }, 3000);
+        return () => clearInterval(heartbeat);
+    }, [loading, submissionResult]);
 
     const triggerViolation = async (reason = 'Tab switch', type = 'tab') => {
         const now = Date.now();
@@ -160,13 +234,17 @@ const TestEngine = () => {
         }
 
         setViolationMessage(reason);
+        setViolationType(type);
         setShowWarningModal(true);
+
+        // Use ref to always get latest session (avoids stale closure from useEffect [])
+        const currentSession = sessionRef.current;
 
         // We only log client-side violations here (like tab switch). 
         // Snapshot violations are logged by the server.
-        if (session?.id && type === 'tab') {
+        if (currentSession?.id && type === 'tab') {
             try {
-                const res = await logViolation(session.id, { violation_type: 'tab_switch' });
+                const res = await logViolation(currentSession.id, { violation_type: 'tab_switch' });
                 if (res.status === 'terminated') {
                     handleTermination();
                 }
@@ -281,7 +359,7 @@ const TestEngine = () => {
                         <h2 style={{ fontSize: 22, fontWeight: 700, color: '#111827', margin: '0 0 8px' }}>Proctoring Warning</h2>
                         <p style={{ fontSize: 14, color: '#6b7280', marginBottom: 16 }}>{violationMessage || 'Violation detected.'}</p>
                         <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 10, padding: '12px 16px', fontSize: 16, fontWeight: 700, color: '#dc2626', marginBottom: 20 }}>
-                            {violationMessage.includes('Tab') ? `Tab Violations Remaining: ${Math.max(0, 3 - tabWarnings)}` : `Webcam Violations Remaining: ${Math.max(0, 3 - webcamWarnings)}`}
+                            {violationType === 'tab' ? `Tab Violations Remaining: ${Math.max(0, 3 - tabWarnings)}` : `Webcam Violations Remaining: ${Math.max(0, 3 - webcamWarnings)}`}
                         </div>
                         <button onClick={() => setShowWarningModal(false)} style={s.btnDanger}>I Understand & Resume</button>
                     </div>
