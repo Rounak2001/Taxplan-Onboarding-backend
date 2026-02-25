@@ -31,12 +31,8 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'rest_framework',
     'corsheaders',
-    'authentication',
-    'consultant_documents',
-    'face_verification',
-    'assessment',
-    'admin_panel',
-    'ai_analysis',
+    'consultant_core',
+    'consultant_assessment',
 ]
 
 MIDDLEWARE = [
@@ -71,22 +67,35 @@ TEMPLATES = [
 WSGI_APPLICATION = 'taxplan_backend.wsgi.application'
 
 # Database - Supabase PostgreSQL
+# DATABASES = {
+#     'default': {
+#         'ENGINE': 'django.db.backends.postgresql',
+#         'NAME': os.getenv('SUPABASE_DB_NAME', 'postgres'),
+#         'USER': os.getenv('SUPABASE_DB_USER'),
+#         'PASSWORD': os.getenv('SUPABASE_DB_PASSWORD'),
+#         'HOST': os.getenv('SUPABASE_DB_HOST'),
+#         'PORT': os.getenv('SUPABASE_DB_PORT', '5432'),
+#         'OPTIONS': {
+#             'sslmode': 'require',
+#         },
+#     }
+# }
+
+import dj_database_url
+import os
+
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': os.getenv('SUPABASE_DB_NAME', 'postgres'),
-        'USER': os.getenv('SUPABASE_DB_USER'),
-        'PASSWORD': os.getenv('SUPABASE_DB_PASSWORD'),
-        'HOST': os.getenv('SUPABASE_DB_HOST'),
-        'PORT': os.getenv('SUPABASE_DB_PORT', '5432'),
-        'OPTIONS': {
-            'sslmode': 'require',
-        },
-    }
+    'default': dj_database_url.config(
+        default=os.environ.get('DATABASE_URL'),
+        conn_max_age=60,
+        ssl_require=True
+    )
 }
 
+
+
 # Custom User Model
-AUTH_USER_MODEL = 'authentication.User'
+AUTH_USER_MODEL = 'consultant_core.User'
 
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [
@@ -115,7 +124,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # REST Framework
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
-        'authentication.authentication.JWTAuthentication',
+        'consultant_core.authentication.JWTAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',

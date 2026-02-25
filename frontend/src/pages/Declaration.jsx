@@ -5,7 +5,7 @@ import { acceptDeclaration } from '../services/api';
 
 const Declaration = () => {
     const navigate = useNavigate();
-    const { checkAuth, user } = useAuth();
+    const { checkAuth, user, getNextRoute, syncAuthData } = useAuth();
 
     const [agreements, setAgreements] = useState({
         accuracy: false,
@@ -28,9 +28,9 @@ const Declaration = () => {
         setLoading(true);
         setError(null);
         try {
-            await acceptDeclaration();
-            await checkAuth();
-            navigate('/onboarding');
+            const data = await acceptDeclaration();
+            syncAuthData(data);
+            navigate(getNextRoute(data));
         } catch (err) {
             console.error('Error accepting declaration:', err);
             setError('Failed to submit declaration. Please try again.');
@@ -49,18 +49,7 @@ const Declaration = () => {
     const descStyle = { fontSize: 13, color: '#6b7280', lineHeight: 1.5 };
 
     return (
-        <div style={{ minHeight: '100vh', background: '#f9fafb', fontFamily: "'Inter', system-ui, sans-serif" }}>
-            {/* Header matching Onboarding */}
-            <header style={{ background: '#fff', borderBottom: '1px solid #e5e7eb', position: 'sticky', top: 0, zIndex: 30 }}>
-                <div style={{ maxWidth: 900, margin: '0 auto', padding: '0 32px', height: 56, display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <div style={{ width: 32, height: 32, background: '#059669', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <span style={{ color: '#fff', fontWeight: 700, fontSize: 13 }}>T</span>
-                    </div>
-                    <span style={{ fontWeight: 600, color: '#111827', fontSize: 15 }}>Taxplan Advisor</span>
-                    <span style={{ marginLeft: 'auto', fontSize: 13, color: '#9ca3af' }}>{user?.email}</span>
-                </div>
-            </header>
-
+        <>
             <div style={{ maxWidth: 800, margin: '0 auto', padding: '40px 32px 60px' }}>
 
                 {/* Title */}
@@ -134,7 +123,7 @@ const Declaration = () => {
                     </button>
                 </div>
             </div>
-        </div>
+        </>
     );
 };
 

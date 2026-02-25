@@ -24,7 +24,8 @@ const ConsultantDetail = () => {
 
     const fetchDetail = async () => {
         try {
-            const res = await fetch(`http://localhost:8000/api/admin-panel/consultants/${id}/`, {
+            const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api';
+            const res = await fetch(`${API_BASE_URL}/admin-panel/consultants/${id}/`, {
                 headers: { 'Authorization': `Bearer ${token}` },
             });
             if (res.status === 401 || res.status === 403) { localStorage.removeItem('admin_token'); navigate('/admin'); return; }
@@ -39,7 +40,8 @@ const ConsultantDetail = () => {
         if (!window.confirm("Are you sure you want to generate and email credentials to this consultant?")) return;
         setGenerating(true);
         try {
-            const res = await fetch(`http://localhost:8000/api/admin-panel/consultants/${id}/generate-credentials/`, {
+            const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api';
+            const res = await fetch(`${API_BASE_URL}/admin-panel/consultants/${id}/generate-credentials/`, {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${token}` },
             });

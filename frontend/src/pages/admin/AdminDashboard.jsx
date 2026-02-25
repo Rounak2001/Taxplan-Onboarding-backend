@@ -17,7 +17,8 @@ const AdminDashboard = () => {
 
     const fetchConsultants = async () => {
         try {
-            const res = await fetch('http://localhost:8000/api/admin-panel/consultants/', {
+            const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api';
+            const res = await fetch(`${API_BASE_URL}/admin-panel/consultants/`, {
                 headers: { 'Authorization': `Bearer ${token}` },
             });
             if (res.status === 401 || res.status === 403) { localStorage.removeItem('admin_token'); navigate('/admin'); return; }

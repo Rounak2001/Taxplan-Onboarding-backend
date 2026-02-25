@@ -5,7 +5,7 @@ import { completeOnboarding } from '../services/api';
 
 const Onboarding = () => {
     const navigate = useNavigate();
-    const { user, updateUser } = useAuth();
+    const { user, updateUser, getNextRoute, syncAuthData } = useAuth();
     const [loading, setLoading] = useState(false);
     const [errors, setErrors] = useState({});
 
@@ -73,8 +73,9 @@ const Onboarding = () => {
         setLoading(true);
         try {
             const data = await completeOnboarding(formData);
-            updateUser(data.user);
-            navigate('/success');
+            syncAuthData(data);
+            // After profile submission, check the next step (usually Declaration if not done)
+            navigate(getNextRoute(data));
         } catch (err) {
             console.error('Onboarding failed:', err);
             if (err.response?.data) {
@@ -108,18 +109,7 @@ const Onboarding = () => {
     const errorStyle = { fontSize: 12, color: '#ef4444', marginTop: 4 };
 
     return (
-        <div style={{ minHeight: '100vh', background: '#f9fafb', fontFamily: "'Inter', system-ui, sans-serif" }}>
-            {/* Header */}
-            <header style={{ background: '#fff', borderBottom: '1px solid #e5e7eb', position: 'sticky', top: 0, zIndex: 30 }}>
-                <div style={{ maxWidth: 900, margin: '0 auto', padding: '0 32px', height: 56, display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <div style={{ width: 32, height: 32, background: '#059669', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <span style={{ color: '#fff', fontWeight: 700, fontSize: 13 }}>T</span>
-                    </div>
-                    <span style={{ fontWeight: 600, color: '#111827', fontSize: 15 }}>Taxplan Advisor</span>
-                    <span style={{ marginLeft: 'auto', fontSize: 13, color: '#9ca3af' }}>{user?.email}</span>
-                </div>
-            </header>
-
+        <>
             <div style={{ maxWidth: 900, margin: '0 auto', padding: '32px 32px 60px' }}>
                 {/* Title */}
                 <div style={{ marginBottom: 28 }}>
@@ -232,7 +222,7 @@ const Onboarding = () => {
                     </div>
                 </form>
             </div>
-        </div>
+        </>
     );
 };
 

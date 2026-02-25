@@ -1,6 +1,7 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import Header from './components/Header';
 import Login from './pages/Login';
 import Onboarding from './pages/Onboarding';
 import Success from './pages/Success';
@@ -17,12 +18,24 @@ import AdminLogin from './pages/admin/AdminLogin';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import ConsultantDetail from './pages/admin/ConsultantDetail';
 import './index.css';
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || "1051464119459-a5apk0uflgqp3le9avo2qttmmrqcsg52.apps.googleusercontent.com";
 
-const GOOGLE_CLIENT_ID = "1051464119459-a5apk0uflgqp3le9avo2qttmmrqcsg52.apps.googleusercontent.com";
+// Layout for onboarding pages — includes a fixed header
+export const OnboardingLayout = () => {
+  return (
+    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+      <Header />
+      <main style={{ flex: 1, position: 'relative' }}>
+        <Outlet />
+      </main>
+    </div>
+  );
+};
 
 // Protected Route — requires authentication
 const ProtectedRoute = ({ children }) => {
-  const { isAuthenticated, user, stepFlags, loading } = useAuth();
+  const { isAuthenticated, loading } = useAuth();
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -30,19 +43,15 @@ const ProtectedRoute = ({ children }) => {
       </div>
     );
   }
-  if (!isAuthenticated) return <Navigate to="/" replace />;
 
-  // Force declaration acceptance for any protected route EXCEPT the declaration page itself
-  if (user && !stepFlags?.has_accepted_declaration && window.location.pathname !== '/declaration') {
-    return <Navigate to="/declaration" replace />;
-  }
+  if (!isAuthenticated) return <Navigate to="/" replace />;
 
   return children;
 };
 
 // Public Route — redirect if already logged in
 const PublicRoute = ({ children }) => {
-  const { isAuthenticated, user, loading, stepFlags } = useAuth();
+  const { isAuthenticated, loading, getNextRoute } = useAuth();
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -51,9 +60,7 @@ const PublicRoute = ({ children }) => {
     );
   }
   if (isAuthenticated) {
-    if (user && !stepFlags?.has_accepted_declaration) return <Navigate to="/declaration" replace />;
-    if (user && !user.is_onboarded) return <Navigate to="/onboarding" replace />;
-    return <Navigate to="/success" replace />;
+    return <Navigate to={getNextRoute()} replace />;
   }
   return children;
 };
@@ -107,9 +114,10 @@ const StepGuard = ({ step, children }) => {
   }
 
   if (!allowed) {
-    if (!hasAcceptedDeclaration) return <Navigate to="/declaration" replace />;
-    if (!onboarded) return <Navigate to="/onboarding" replace />;
-    return <Navigate to="/success" replace />;
+    // If we're not allowed here, go to wherever getNextRoute says
+    // (This is much safer than hardcoded redirects)
+    const { getNextRoute } = useAuth();
+    return <Navigate to={getNextRoute()} replace />;
   }
 
   return children;
@@ -119,41 +127,39 @@ function AppRoutes() {
   return (
     <Routes>
       <Route path="/" element={<PublicRoute><Login /></PublicRoute>} />
-      <Route path="/declaration" element={
-        <ProtectedRoute><Declaration /></ProtectedRoute>
-      } />
-      <Route path="/onboarding" element={
-        <ProtectedRoute><StepGuard step="onboarding"><Onboarding /></StepGuard></ProtectedRoute>
-      } />
-      <Route path="/success" element={
-        <ProtectedRoute><StepGuard step="dashboard"><Success /></StepGuard></ProtectedRoute>
-      } />
-      <Route path="/onboarding/identity" element={
-        <ProtectedRoute><StepGuard step="identity"><IdentityVerification /></StepGuard></ProtectedRoute>
-      } />
-      <Route path="/onboarding/face-verification" element={
-        <ProtectedRoute><StepGuard step="face"><FaceVerification /></StepGuard></ProtectedRoute>
-      } />
-      <Route path="/assessment/select" element={
-        <ProtectedRoute><StepGuard step="assessment"><TestList /></StepGuard></ProtectedRoute>
-      } />
-      <Route path="/assessment/instructions" element={
-        <ProtectedRoute><StepGuard step="assessment"><Instructions /></StepGuard></ProtectedRoute>
-      } />
-      <Route path="/assessment/test" element={
-        <ProtectedRoute><StepGuard step="assessment"><TestEngine /></StepGuard></ProtectedRoute>
-      } />
-      <Route path="/assessment/result" element={
-        <ProtectedRoute><AssessmentResult /></ProtectedRoute>
-      } />
-      <Route path="/onboarding/documentation" element={
-        <ProtectedRoute><StepGuard step="documents"><DocumentUpload /></StepGuard></ProtectedRoute>
-      } />
-      <Route path="/onboarding/complete" element={
-        <ProtectedRoute><OnboardingComplete /></ProtectedRoute>
-      } />
 
-      {/* Admin Panel Routes — standalone, no auth guards */}
+      {/* Protected Onboarding Routes with Layout */}
+      <Route element={<ProtectedRoute><OnboardingLayout /></ProtectedRoute>}>
+        <Route path="/declaration" element={<Declaration />} />
+        <Route path="/onboarding" element={
+          <StepGuard step="onboarding"><Onboarding /></StepGuard>
+        } />
+        <Route path="/success" element={
+          <StepGuard step="dashboard"><Success /></StepGuard>
+        } />
+        <Route path="/onboarding/identity" element={
+          <StepGuard step="identity"><IdentityVerification /></StepGuard>
+        } />
+        <Route path="/onboarding/face-verification" element={
+          <StepGuard step="face"><FaceVerification /></StepGuard>
+        } />
+        <Route path="/assessment/select" element={
+          <StepGuard step="assessment"><TestList /></StepGuard>
+        } />
+        <Route path="/assessment/instructions" element={
+          <StepGuard step="assessment"><Instructions /></StepGuard>
+        } />
+        <Route path="/assessment/test" element={
+          <StepGuard step="assessment"><TestEngine /></StepGuard>
+        } />
+        <Route path="/assessment/result" element={<AssessmentResult />} />
+        <Route path="/onboarding/documentation" element={
+          <StepGuard step="documents"><DocumentUpload /></StepGuard>
+        } />
+        <Route path="/onboarding/complete" element={<OnboardingComplete />} />
+      </Route>
+
+      {/* Admin Panel Routes — standalone */}
       <Route path="/admin" element={<AdminLogin />} />
       <Route path="/admin/dashboard" element={<AdminDashboard />} />
       <Route path="/admin/consultant/:id" element={<ConsultantDetail />} />

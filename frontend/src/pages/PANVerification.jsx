@@ -50,7 +50,8 @@ const PANVerification = () => {
         setError(null);
 
         try {
-            const response = await fetch('http://localhost:8000/api/sandbox/verify-pan/', {
+            const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api';
+            const response = await fetch(`${API_BASE_URL}/sandbox/verify-pan/`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -113,8 +114,8 @@ const PANVerification = () => {
                     <button
                         onClick={closeModal}
                         className={`w-full py-4 rounded-2xl font-bold text-white text-lg transition-all ${showModal.type === 'success'
-                                ? 'bg-emerald-600 hover:bg-emerald-700 shadow-lg shadow-emerald-200'
-                                : 'bg-red-600 hover:bg-red-700 shadow-lg shadow-red-200 pl-4 pr-4'
+                            ? 'bg-emerald-600 hover:bg-emerald-700 shadow-lg shadow-emerald-200'
+                            : 'bg-red-600 hover:bg-red-700 shadow-lg shadow-red-200 pl-4 pr-4'
                             }`}
                     >
                         {showModal.type === 'success' ? 'Continue' : 'Close & Logout'}
