@@ -24,7 +24,6 @@ const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || "1051464119459
 export const OnboardingLayout = () => {
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-      <Header />
       <main style={{ flex: 1, position: 'relative' }}>
         <Outlet />
       </main>

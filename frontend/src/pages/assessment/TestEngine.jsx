@@ -410,14 +410,9 @@ const TestEngine = () => {
                 </div>
             )}
 
-            {/* Header */}
+            {/* Header / Timer Bar */}
             <header style={s.header}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <div style={{ width: 32, height: 32, background: '#059669', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <span style={{ color: '#fff', fontWeight: 700, fontSize: 13 }}>T</span>
-                    </div>
-                    <span style={{ fontWeight: 600, color: '#111827', fontSize: 15 }}>Taxplan Advisor</span>
-                </div>
+                <div></div> {/* Empty div to keep flex alignment for the right-side timer */}
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
                     {/* MCQ timer only — video timer is inside VideoQuestion */}
