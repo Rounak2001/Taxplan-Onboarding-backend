@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { getLatestResult } from '../services/api';
 
 const Success = () => {
-    const { user, stepFlags, logout, checkAuth } = useAuth();
+    const { user, stepFlags, checkAuth } = useAuth();
     const navigate = useNavigate();
     const [assessmentPassed, setAssessmentPassed] = useState(stepFlags?.has_passed_assessment || false);
     const [assessmentStatus, setAssessmentStatus] = useState(null);
@@ -22,10 +22,6 @@ const Success = () => {
             .catch(() => { });
     }, []);
 
-    const handleLogout = async () => {
-        await logout();
-        navigate('/');
-    };
 
     const hasIdentity = stepFlags?.has_identity_doc;
     const isVerified = user?.is_verified;
@@ -67,25 +63,6 @@ const Success = () => {
 
     return (
         <div style={{ minHeight: '100vh', background: '#f9fafb', fontFamily: "'Inter', system-ui, sans-serif" }}>
-            {/* Header */}
-            <header style={{ background: '#fff', borderBottom: '1px solid #e5e7eb', position: 'sticky', top: 0, zIndex: 30 }}>
-                <div style={{ maxWidth: 1200, margin: '0 auto', padding: '0 32px', height: 56, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                        <div style={{ width: 32, height: 32, background: '#059669', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <span style={{ color: '#fff', fontWeight: 700, fontSize: 13 }}>T</span>
-                        </div>
-                        <span style={{ fontWeight: 600, color: '#111827', fontSize: 15 }}>Taxplan Advisor</span>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                        <span style={{ fontSize: 13, color: '#9ca3af' }}>{user?.email}</span>
-                        <button onClick={handleLogout} style={{ fontSize: 13, color: '#6b7280', fontWeight: 500, cursor: 'pointer', background: 'none', border: 'none', padding: '6px 12px', borderRadius: 6 }}
-                            onMouseEnter={e => e.target.style.color = '#dc2626'} onMouseLeave={e => e.target.style.color = '#6b7280'}>
-                            Sign Out
-                        </button>
-                    </div>
-                </div>
-            </header>
-
             {/* Content */}
             <div style={{ maxWidth: 1200, margin: '0 auto', padding: '40px 32px' }}>
                 {/* Welcome */}

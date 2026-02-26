@@ -63,6 +63,7 @@ const Onboarding = () => {
         if (!formData.city?.trim()) e.city = 'City required';
         if (!formData.state?.trim()) e.state = 'State required';
         if (!formData.pincode?.trim() || formData.pincode.trim().length < 6) e.pincode = 'Valid pincode required (6 digits)';
+        if (!formData.years_of_experience && formData.years_of_experience !== 0) e.years_of_experience = 'Years of experience is required';
         return e;
     };
 
@@ -204,8 +205,9 @@ const Onboarding = () => {
                                 </select>
                             </div>
                             <div>
-                                <label style={labelStyle}>Years of Experience</label>
-                                <input name="years_of_experience" value={formData.years_of_experience} onChange={handleChange} type="number" placeholder="e.g. 5" style={inputStyle(false)} />
+                                <label style={labelStyle}>Years of Experience <span style={{ color: '#ef4444' }}>*</span></label>
+                                <input name="years_of_experience" value={formData.years_of_experience} onChange={handleChange} type="number" min="0" placeholder="e.g. 5" style={inputStyle(errors.years_of_experience)} />
+                                {errors.years_of_experience && <p style={errorStyle}>{errors.years_of_experience}</p>}
                             </div>
                         </div>
                     </div>
