@@ -28,9 +28,7 @@ const IdentityVerification = () => {
         if (!file) return;
         setUploading(true); setError('');
         try {
-            const formData = new FormData();
-            formData.append('identity_document', file);
-            await uploadIdentityDocument(formData);
+            await uploadIdentityDocument(file);
             updateStepFlags({ has_identity_doc: true });
             navigate('/onboarding/face-verification');
         } catch (err) { setError('Upload failed. Please try again.'); console.error(err); }

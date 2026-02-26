@@ -28,6 +28,12 @@ const TestEngine = () => {
     const [isFullScreen, setIsFullScreen] = useState(() => !!document.fullscreenElement);
     const [submissionResult, setSubmissionResult] = useState(null);
     const lastViolationTime = useRef(0);
+    // Suppresses all violation detection during the planned MCQ→Video fullscreen transition
+    const isPhaseTransitioning = useRef(false);
+    // Tracks whether MCQ answers have already been submitted, to avoid double-submission
+    const mcqSubmitted = useRef(false);
+    const answersRef = useRef(answers);
+    useEffect(() => { answersRef.current = answers; }, [answers]);
 
     // Refs to avoid stale closures in event listeners
     const sessionRef = useRef(session);
@@ -51,15 +57,30 @@ const TestEngine = () => {
     }, [session, navigate]);
 
     // MCQ next
-    const handleNext = useCallback(() => {
+    const handleNext = useCallback(async () => {
         if (currentQuestionIndex < questions.length - 1) {
             setCurrentQuestionIndex(prev => prev + 1);
             setQuestionTimeLeft(30);
         } else {
+            // Auto-save MCQ answers BEFORE entering video section so they're not lost if video fails
+            if (!mcqSubmitted.current && session?.id) {
+                mcqSubmitted.current = true;
+                try {
+                    await submitTest(session.id, { answers: answersRef.current });
+                } catch (err) {
+                    console.error('MCQ auto-save failed:', err);
+                    // Don't block progress — still go to video section
+                }
+            }
+            // Mark as transitioning BEFORE exiting fullscreen so listeners don't fire violations
+            isPhaseTransitioning.current = true;
+            if (document.fullscreenElement) {
+                document.exitFullscreen().catch(() => { });
+            }
             setIsVideoSection(true);
             setCurrentVideoQuestionIndex(0);
         }
-    }, [currentQuestionIndex, questions.length]);
+    }, [currentQuestionIndex, questions.length, session?.id, answers]);
 
     // MCQ 30s timer
     useEffect(() => {
@@ -129,12 +150,13 @@ const TestEngine = () => {
     useEffect(() => {
         // Fires when browser tab is switched (works cross-platform)
         const onVisChange = () => {
+            if (isPhaseTransitioning.current) return;
             if (document.hidden) triggerViolation('Tab switch detected', 'tab');
         };
 
         // Fires on Alt+Tab / workspace switch on Linux (visibilitychange may not fire)
         const onBlur = () => {
-            // Only count as violation if we are in fullscreen (test is active)
+            if (isPhaseTransitioning.current) return;
             if (document.fullscreenElement && !submissionResultRef.current) {
                 triggerViolation('Window lost focus', 'tab');
             }
@@ -142,6 +164,7 @@ const TestEngine = () => {
 
         // Re-check fullscreen when user returns — catches WM-level fullscreen exit
         const onFocus = () => {
+            if (isPhaseTransitioning.current) return;
             if (!document.fullscreenElement && !submissionResultRef.current) {
                 triggerViolation('Fullscreen exited while away', 'tab');
             }
@@ -196,6 +219,7 @@ const TestEngine = () => {
     useEffect(() => {
         if (loading || submissionResult) return;
         const focusPoll = setInterval(() => {
+            if (isPhaseTransitioning.current) return;
             const fsEl = document.fullscreenElement || document.webkitFullscreenElement;
             if (!document.hasFocus() && fsEl && !submissionResultRef.current) {
                 triggerViolation('Focus lost (polling detected)', 'tab');
@@ -213,7 +237,7 @@ const TestEngine = () => {
             const now = Date.now();
             const gap = now - lastTick;
             lastTick = now;
-            // If gap > 6s, JS was paused (App Nap, heavy throttling, etc.)
+            if (isPhaseTransitioning.current) return;
             if (gap > 6000 && document.fullscreenElement && !submissionResultRef.current) {
                 triggerViolation('Browser execution paused (possible app switch)', 'tab');
             }
@@ -257,6 +281,8 @@ const TestEngine = () => {
     const enterFullScreen = () => {
         document.documentElement.requestFullscreen().catch(console.error);
         setIsFullScreen(true);
+        // Phase transition is complete — re-enable violation detection
+        isPhaseTransitioning.current = false;
     };
 
     const handleAnswer = (optionKey) => {
@@ -274,21 +300,24 @@ const TestEngine = () => {
 
     const handleSubmitTest = async () => {
         try {
-            if (snapshotIntervalRef.current) clearInterval(snapshotIntervalRef.current); // Stop snapshots
+            if (snapshotIntervalRef.current) clearInterval(snapshotIntervalRef.current);
 
-            // Exit fullscreen and wait for it to complete
             if (document.fullscreenElement) {
-                try {
-                    await document.exitFullscreen();
-                } catch (e) { /* ignore */ }
-                // Small delay to ensure browser finishes exiting fullscreen
+                try { await document.exitFullscreen(); } catch (e) { /* ignore */ }
                 await new Promise(resolve => setTimeout(resolve, 200));
             }
 
-            const res = await submitTest(session.id, { answers });
-            navigate('/assessment/result', {
-                state: { result: { ...res, passed: res.passed ?? (res.score >= 0) } }
-            });
+            // Only submit MCQ answers if not already auto-saved when transitioning to video
+            if (!mcqSubmitted.current) {
+                mcqSubmitted.current = true;
+                const res = await submitTest(session.id, { answers });
+                navigate('/assessment/result', {
+                    state: { result: { ...res, passed: res.passed ?? (res.score >= 0) } }
+                });
+            } else {
+                // MCQ was already submitted — just navigate to result
+                navigate('/assessment/result', { state: { result: { score: null, alreadySubmitted: true } } });
+            }
         } catch (err) {
             console.error('Failed to submit test:', err);
             alert('Submission failed. Please try again.');

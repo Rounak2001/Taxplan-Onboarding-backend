@@ -65,11 +65,7 @@ const DocumentUpload = () => {
         try {
             for (let i = 0; i < allFiles.length; i++) {
                 setUploadProgress(`Uploading ${i + 1} of ${allFiles.length}...`);
-                const formData = new FormData();
-                formData.append('file', allFiles[i].file);
-                formData.append('document_type', allFiles[i].type);
-                formData.append('qualification_type', 'Education'); 
-                await uploadDocument(formData);
+                await uploadDocument('Education', allFiles[i].type, allFiles[i].file);
             }
             navigate('/onboarding/complete');
         } catch (err) {

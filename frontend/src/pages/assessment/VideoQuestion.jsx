@@ -98,18 +98,27 @@ export default function VideoQuestion({ question, onVideoUploaded, sessionId, qu
         setError('');
 
         try {
-            const formData = new FormData();
-            formData.append('video', uploadBlob, `video_${question.id}.webm`);
-            formData.append('question_id', question.id);
+            // Convert blob to a File object so it has a .name and .type property
+            const videoFile = new File([uploadBlob], `video_${question.id}.webm`, { type: 'video/webm' });
 
             const apiModule = await import('../../services/api');
-            await apiModule.submitVideo(sessionId, formData);
+            await apiModule.submitVideo(sessionId, question.id, videoFile);
 
             setUploaded(true);
             setTimeout(() => onVideoUploaded && onVideoUploaded(), 800);
         } catch (err) {
-            setError('Upload failed. Please try again.');
             console.error('Video upload error:', err);
+            let msg = 'Upload failed. Please try again.';
+            if (err?.message?.includes('Failed to upload file to S3')) {
+                msg = 'Could not upload video to storage (S3 error). This is likely a CORS or permissions issue — please contact support.';
+            } else if (!navigator.onLine) {
+                msg = 'No internet connection. Please check your network and try again.';
+            } else if (err?.response?.status === 403) {
+                msg = 'Upload blocked (403 Forbidden). Please contact support.';
+            } else if (err?.response?.status >= 500) {
+                msg = 'Server error during upload. Please try again in a moment.';
+            }
+            setError(msg);
         } finally {
             setUploading(false);
         }

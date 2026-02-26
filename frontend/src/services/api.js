@@ -45,12 +45,45 @@ export const healthCheck = async () => {
     return response.data;
 };
 
-// Upload consultant document
-export const uploadDocument = async (formData) => {
-    const response = await api.post('/documents/upload/', formData, {
+// Upload directly to S3 using PUT
+export const uploadDirectlyToS3 = async (presignedUrl, file, contentType) => {
+    // We use a raw fetch or standard axios without interceptors so we don't send auth headers to S3
+    const response = await fetch(presignedUrl, {
+        method: 'PUT',
+        body: file,
         headers: {
-            'Content-Type': 'multipart/form-data',
+            'Content-Type': contentType,
         },
+    });
+    if (!response.ok) {
+        throw new Error('Failed to upload file to S3');
+    }
+    return response;
+};
+
+// --- Qualification Documents ---
+export const getDocumentUploadUrl = async (data) => {
+    const response = await api.post('/documents/get-upload-url/', data);
+    return response.data;
+};
+
+export const uploadDocument = async (qualificationType, documentType, file) => {
+    // 1. Get Presigned URL
+    const fileExt = file.name.split('.').pop();
+    const urlData = await getDocumentUploadUrl({
+        filename: file.name,
+        file_ext: fileExt,
+        content_type: file.type
+    });
+
+    // 2. Upload to S3
+    await uploadDirectlyToS3(urlData.url, file, file.type);
+
+    // 3. Save to DB
+    const response = await api.post('/documents/upload/', {
+        qualification_type: qualificationType,
+        document_type: documentType,
+        s3_path: urlData.path
     });
     return response.data;
 };
@@ -62,9 +95,7 @@ export const getDocuments = async () => {
 };
 
 
-
-
-// Face Verification - Upload ID Photo
+// --- Face Verification ---
 export const uploadFaceVerificationPhoto = async (userId, formData) => {
     const response = await api.post(`/face-verification/users/${userId}/upload-photo/`, formData, {
         headers: {
@@ -74,24 +105,37 @@ export const uploadFaceVerificationPhoto = async (userId, formData) => {
     return response.data;
 };
 
-// Face Verification - Verify Face
 export const verifyFace = async (userId, data) => {
     const response = await api.post(`/face-verification/users/${userId}/verify-face/`, data);
     return response.data;
 };
 
 
-// Identity Verification - Upload Document
-export const uploadIdentityDocument = async (formData) => {
-    const response = await api.post('/auth/identity/upload-doc/', formData, {
-        headers: {
-            'Content-Type': 'multipart/form-data',
-        },
+// --- Identity Verification ---
+export const getIdentityDocUploadUrl = async (data) => {
+    const response = await api.post('/auth/identity/get-upload-url/', data);
+    return response.data;
+};
+
+export const uploadIdentityDocument = async (file) => {
+    // 1. Get Presigned URL
+    const fileExt = file.name.split('.').pop();
+    const urlData = await getIdentityDocUploadUrl({
+        file_ext: fileExt,
+        content_type: file.type
+    });
+
+    // 2. Upload to S3
+    await uploadDirectlyToS3(urlData.url, file, file.type);
+
+    // 3. Save to DB
+    const response = await api.post('/auth/identity/upload-doc/', {
+        s3_path: urlData.path
     });
     return response.data;
 };
 
-// Assessment API
+// --- Assessment API ---
 export const getTestTypes = async () => {
     const response = await api.get('/assessment/test-types/');
     return response.data;
@@ -107,12 +151,27 @@ export const submitTest = async (sessionId, data) => {
     return response.data;
 };
 
-export const submitVideo = async (sessionId, formData) => {
-    // formData should contain 'video' and 'question_id'
-    const response = await api.post(`/assessment/sessions/${sessionId}/submit_video/`, formData, {
-        headers: {
-            'Content-Type': 'multipart/form-data',
-        },
+export const getVideoUploadUrl = async (sessionId, data) => {
+    const response = await api.post(`/assessment/sessions/${sessionId}/get_video_upload_url/`, data);
+    return response.data;
+};
+
+export const submitVideo = async (sessionId, questionId, file) => {
+    // 1. Get Presigned URL
+    const fileExt = file.name.split('.').pop();
+    const urlData = await getVideoUploadUrl(sessionId, {
+        question_id: questionId,
+        file_ext: fileExt,
+        content_type: file.type
+    });
+
+    // 2. Upload to S3
+    await uploadDirectlyToS3(urlData.url, file, file.type);
+
+    // 3. Save to DB and trigger eval
+    const response = await api.post(`/assessment/sessions/${sessionId}/submit_video/`, {
+        question_id: questionId,
+        s3_path: urlData.path
     });
     return response.data;
 };
