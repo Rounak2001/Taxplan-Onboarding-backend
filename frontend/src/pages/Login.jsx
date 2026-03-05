@@ -6,29 +6,48 @@ import { useAuth } from '../context/AuthContext';
 
 const Login = () => {
     const navigate = useNavigate();
-    const { checkAuth } = useAuth();
+    const { syncAuthData } = useAuth();
     const [error, setError] = useState('');
 
     const handleGoogleSuccess = async (credentialResponse) => {
         try {
             const data = await googleAuth(credentialResponse.credential);
 
-            // Store the applicant JWT in localStorage so the axios interceptor
-            // can send it as 'Authorization: Bearer <token>' on all future requests.
-            // This is the fallback auth path when cookies can't travel cross-domain
-            // (e.g. Safari ITP or direct API access bypassing the Vercel proxy).
+            // Store the applicant JWT so the axios interceptor sends it as Bearer on all future requests
             if (data.applicant_token) {
                 localStorage.setItem('applicant_token', data.applicant_token);
             }
 
-            await checkAuth(); // Sync the stepFlags
-            if (data.needs_onboarding) {
-                navigate('/onboarding');
+            // Sync context state with the fresh server data
+            syncAuthData(data);
+
+            // Derive next route directly from server response — BEFORE React re-renders
+            // from syncAuthData. If we called checkAuth() first, React would re-render
+            // PublicRoute with isAuthenticated=true which immediately navigates via
+            // getNextRoute() → /declaration, racing with whatever we navigate to next.
+            // Using the fresh response data avoids any stale-state race condition.
+            const targetUser = data.user;
+            let nextRoute = '/';
+            if (!data.has_accepted_declaration) {
+                nextRoute = '/declaration';
+            } else if (!targetUser?.is_onboarded) {
+                nextRoute = '/onboarding';
+            } else if (!data.has_identity_doc) {
+                nextRoute = '/onboarding/identity';
+            } else if (!targetUser?.is_verified) {
+                nextRoute = '/onboarding/face-verification';
+            } else if (!data.has_passed_assessment) {
+                nextRoute = '/assessment/select';
+            } else if (!data.has_documents) {
+                nextRoute = '/onboarding/documentation';
             } else {
-                navigate('/success');
+                nextRoute = '/success';
             }
+            navigate(nextRoute);
         } catch (err) {
-            setError('Authentication failed. Please try again.');
+            // Show the actual server error message if available (e.g. "email already registered as Client")
+            const serverMessage = err?.response?.data?.error;
+            setError(serverMessage || 'Authentication failed. Please try again.');
             console.error('Login error:', err);
         }
     };

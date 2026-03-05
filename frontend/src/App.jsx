@@ -65,7 +65,7 @@ const PublicRoute = ({ children }) => {
 
 
 const StepGuard = ({ step, children }) => {
-  const { user, stepFlags, loading } = useAuth();
+  const { user, stepFlags, loading, getNextRoute } = useAuth();
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -73,13 +73,6 @@ const StepGuard = ({ step, children }) => {
       </div>
     );
   }
-
-  // Step requirements (each requires all previous to be true)
-  // Step 1: Profile (onboarding) — no prereqs, just authenticated
-  // Step 2: Identity — requires is_onboarded
-  // Step 3: Face — requires is_onboarded + has_identity_doc
-  // Step 4: Assessment — requires is_onboarded + is_verified
-  // Step 5: Documents — requires is_onboarded + has_passed_assessment
 
   const onboarded = user?.is_onboarded;
   const hasAcceptedDeclaration = stepFlags?.has_accepted_declaration;
@@ -112,9 +105,6 @@ const StepGuard = ({ step, children }) => {
   }
 
   if (!allowed) {
-    // If we're not allowed here, go to wherever getNextRoute says
-    // (This is much safer than hardcoded redirects)
-    const { getNextRoute } = useAuth();
     return <Navigate to={getNextRoute()} replace />;
   }
 
