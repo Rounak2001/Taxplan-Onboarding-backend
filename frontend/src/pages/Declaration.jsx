@@ -29,8 +29,29 @@ const Declaration = () => {
         setError(null);
         try {
             const data = await acceptDeclaration();
+            // Sync the context with the fresh server data
             syncAuthData(data);
-            navigate(getNextRoute(data));
+            // Derive next route directly from the fresh response — do NOT use
+            // getNextRoute() here because React state from syncAuthData hasn't
+            // settled yet (state updates are async), so reading isAuthenticated
+            // or stepFlags from the closure would give stale values.
+            // The declaration was just accepted, so we move to the next step.
+            const targetUser = data.user;
+            let nextRoute = '/onboarding';
+            if (!targetUser?.is_onboarded) {
+                nextRoute = '/onboarding';
+            } else if (!data.has_identity_doc) {
+                nextRoute = '/onboarding/identity';
+            } else if (!targetUser?.is_verified) {
+                nextRoute = '/onboarding/face-verification';
+            } else if (!data.has_passed_assessment) {
+                nextRoute = '/assessment/select';
+            } else if (!data.has_documents) {
+                nextRoute = '/onboarding/documentation';
+            } else {
+                nextRoute = '/success';
+            }
+            navigate(nextRoute);
         } catch (err) {
             console.error('Error accepting declaration:', err);
             setError('Failed to submit declaration. Please try again.');

@@ -33,6 +33,10 @@ export const AuthProvider = ({ children }) => {
             });
             setIsAuthenticated(true);
         } catch (error) {
+            // Clear any stale token — if getUserProfile 401s, the token is
+            // expired or invalid. The axios interceptor also clears it, but
+            // we do it here too for immediate consistency.
+            localStorage.removeItem('applicant_token');
             setUser(null);
             setStepFlags({});
             setIsAuthenticated(false);
@@ -40,6 +44,7 @@ export const AuthProvider = ({ children }) => {
             setLoading(false);
         }
     };
+
 
     const syncAuthData = (data) => {
         if (data.user) setUser(data.user);
