@@ -12,7 +12,16 @@ const Login = () => {
     const handleGoogleSuccess = async (credentialResponse) => {
         try {
             const data = await googleAuth(credentialResponse.credential);
-            await checkAuth(); // Sync the stepFlags after setting the session cookie
+
+            // Store the applicant JWT in localStorage so the axios interceptor
+            // can send it as 'Authorization: Bearer <token>' on all future requests.
+            // This is the fallback auth path when cookies can't travel cross-domain
+            // (e.g. Safari ITP or direct API access bypassing the Vercel proxy).
+            if (data.applicant_token) {
+                localStorage.setItem('applicant_token', data.applicant_token);
+            }
+
+            await checkAuth(); // Sync the stepFlags
             if (data.needs_onboarding) {
                 navigate('/onboarding');
             } else {

@@ -1,7 +1,6 @@
 import { BrowserRouter as Router, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import { AuthProvider, useAuth } from './context/AuthContext';
-import Header from './components/Header';
 import Login from './pages/Login';
 import Onboarding from './pages/Onboarding';
 import Success from './pages/Success';

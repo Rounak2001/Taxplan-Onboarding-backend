@@ -1,17 +1,56 @@
 import axios from 'axios';
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api';
+
+// In production: requests go to /api/* on the SAME Vercel domain.
+// Vercel rewrites those to https://main.taxplanadvisor.co/api/* (reverse proxy).
+// This means cookies are SAME-SITE → Safari ITP / cross-site blocking is bypassed entirely.
+//
+// In local dev: VITE_API_BASE_URL points to your local Django server directly.
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
 
 const api = axios.create({
     baseURL: API_BASE_URL,
-    withCredentials: true,
+    withCredentials: true, // keep so cookies still work in local dev
     headers: {
         'Content-Type': 'application/json',
     },
 });
 
-// Google Authentication
+// ── Request Interceptor ──────────────────────────────────────────────────────
+// Inject Authorization: Bearer <token> from localStorage on every request.
+// This is the fallback for environments where the cookie can't be forwarded
+// (e.g. direct API calls during local dev without the Vercel proxy layer).
+api.interceptors.request.use(
+    (config) => {
+        const token = localStorage.getItem('applicant_token');
+        if (token) {
+            config.headers['Authorization'] = `Bearer ${token}`;
+        }
+        return config;
+    },
+    (error) => Promise.reject(error)
+);
+
+// ── Response Interceptor ─────────────────────────────────────────────────────
+// On 401 Unauthorized: clear stored credentials and redirect to login.
+api.interceptors.response.use(
+    (response) => response,
+    (error) => {
+        if (error.response?.status === 401) {
+            localStorage.removeItem('applicant_token');
+            // Only redirect if not already on the login page to avoid redirect loops
+            if (window.location.pathname !== '/') {
+                window.location.href = '/';
+            }
+        }
+        return Promise.reject(error);
+    }
+);
+
+// ── Auth ─────────────────────────────────────────────────────────────────────
+
+// Google Authentication (Onboarding portal — uses distinct endpoint)
 export const googleAuth = async (token) => {
-    const response = await api.post('/auth/google/', { token });
+    const response = await api.post('/onboarding/auth/google/', { token });
     return response.data;
 };
 
@@ -61,7 +100,7 @@ export const uploadDirectlyToS3 = async (presignedUrl, file, contentType) => {
     return response;
 };
 
-// --- Qualification Documents ---
+// ── Qualification Documents ───────────────────────────────────────────────────
 export const getDocumentUploadUrl = async (data) => {
     const response = await api.post('/documents/get-upload-url/', data);
     return response.data;
@@ -95,7 +134,7 @@ export const getDocuments = async () => {
 };
 
 
-// --- Face Verification ---
+// ── Face Verification ─────────────────────────────────────────────────────────
 export const uploadFaceVerificationPhoto = async (userId, formData) => {
     const response = await api.post(`/face-verification/users/${userId}/upload-photo/`, formData, {
         headers: {
@@ -111,7 +150,7 @@ export const verifyFace = async (userId, data) => {
 };
 
 
-// --- Identity Verification ---
+// ── Identity Verification ─────────────────────────────────────────────────────
 export const getIdentityDocUploadUrl = async (data) => {
     const response = await api.post('/auth/identity/get-upload-url/', data);
     return response.data;
@@ -135,7 +174,7 @@ export const uploadIdentityDocument = async (file) => {
     return response.data;
 };
 
-// --- Assessment API ---
+// ── Assessment API ────────────────────────────────────────────────────────────
 export const getTestTypes = async () => {
     const response = await api.get('/assessment/test-types/');
     return response.data;

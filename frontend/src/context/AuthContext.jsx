@@ -71,6 +71,8 @@ export const AuthProvider = ({ children }) => {
         } catch (error) {
             console.error('Logout error:', error);
         } finally {
+            // Clear the applicant JWT so the axios Bearer interceptor stops sending it
+            localStorage.removeItem('applicant_token');
             setUser(null);
             setStepFlags({});
             setIsAuthenticated(false);
